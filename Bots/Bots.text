@@ -1,0 +1,376 @@
+const express = require("express");
+const router = express.Router();
+const fillBotSlots = require("./botLogic");
+const contestModel = require("../model/contestModel");
+const userModel = require("../model/user/user");
+// const {
+//   maincontestJoin,
+// } = require("../controller/upcomingLiveWinningController");
+// const { default: mongoose } = require("mongoose");
+// const mainContestHistory = require("../model/contesthistory");
+const userMainContestDetail = require("../model/admin/userContestDetailSchema");
+const userContestDetailSchema = require("../model/admin/userContestDetailSchema");
+const contesthistory = require("../model/contesthistory");
+
+const handaleBots = async () => {
+  const calculateUserRankings = async (contestId, timeSlot) => {
+    try {
+      const userContestDetails = await userMainContestDetail.find({
+        contestId: contestId,
+        timeslotId: timeSlot,
+      });
+
+      const bidCountMap = new Map();
+      userContestDetails.forEach((user) => {
+        user.bids.forEach((bid) => {
+          const amount = bid.Amount;
+          bidCountMap.set(amount, (bidCountMap.get(amount) || 0) + 1);
+        });
+      });
+
+      const usersData = userContestDetails.map((user) => {
+        let totalBidAmount = 0;
+        let uniqueBidCount = 0;
+        user.bids.forEach((bid) => {
+          const amount = bid.Amount;
+          totalBidAmount += amount;
+
+          if (bidCountMap.get(amount) === 1) {
+            uniqueBidCount++;
+          }
+        });
+
+        return {
+          userId: user.userId,
+          totalBidAmount,
+          uniqueBidCount,
+          winningAmount: 0,
+        };
+      });
+
+      usersData.sort((a, b) => {
+        if (b.totalBidAmount !== a.totalBidAmount) {
+          return b.totalBidAmount - a.totalBidAmount;
+        }
+        return b.uniqueBidCount - a.uniqueBidCount;
+      });
+
+      const rankings = [];
+      let currentRank = 1;
+      let prevUser = null;
+
+      usersData.forEach((user) => {
+        if (
+          prevUser &&
+          (prevUser.totalBidAmount !== user.totalBidAmount ||
+            prevUser.uniqueBidCount !== user.uniqueBidCount)
+        ) {
+          currentRank++;
+        }
+
+        let rankEntry = rankings.find((r) => r.rank === currentRank);
+        if (!rankEntry) {
+          rankEntry = { rank: currentRank, users: [] };
+          rankings.push(rankEntry);
+        }
+
+        rankEntry.users.push({
+          userId: user.userId,
+          totalBidAmount: user.totalBidAmount,
+          uniqueBidCount: user.uniqueBidCount,
+          winningAmount: 0,
+        });
+
+        prevUser = user;
+      });
+      return rankings;
+    } catch (error) {
+      console.error("Error calculating rankings:", error);
+      throw error;
+    }
+  };
+
+  const useBotsList = await userContestDetailSchema
+    .find({ type: "bot" })
+    .select("userId -_id");
+
+  const usedBotIds = useBotsList.map((doc) => doc.userId);
+
+  // Now, get `botUserList` from `userModel` where `userId` is not in `usedBotIds`
+  const botUserList = await userModel.find({
+    type: "bot",
+    _id: { $nin: usedBotIds }, // Exclude IDs that are already in `useBotsList`
+  });
+
+  const response = await contestModel.aggregate([
+    {
+     $match:{isBotActive:true}
+    },
+    {
+      $addFields: {
+        currentTimeSlot: {
+          $let: {
+            vars: {
+              currentSlot: {
+                $filter: {
+                  input: "$timeSlots",
+                  as: "slot",
+                  cond: {
+                    $and: [
+                      { $lte: ["$$slot.startTime", new Date()] },
+                      { $gt: ["$$slot.endTime", new Date()] },
+                    ],
+                  },
+                },
+              },
+            },
+            in: {
+              $cond: {
+                if: { $gt: [{ $size: "$$currentSlot" }, 0] },
+                then: { $arrayElemAt: ["$$currentSlot", 0] }, // Return first current slot as an object
+                else: { $arrayElemAt: ["$timeSlots", -1] }, // Last slot if no current slot
+              },
+            },
+          },
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "contesthistories",
+        localField: "_id",
+        foreignField: "contestId",
+        as: "contestCount",
+      },
+    },
+
+    {
+      $project: {
+        _id: 1,
+        entryAmount: 1,
+        state: 1,
+        slots: 1,
+        upto: 1,
+        totalAmount: 1,
+        type: 1,
+        isBotActive: 1,
+        typeCashBonus: 1,
+        bonusCashPercentage: 1,
+        bonusCashAmount: 1,
+        subcategoryId: 1,
+        platformFeePercentage: 1,
+        platformFeeAmount: 1,
+        prizeDistributionPercentage: 1,
+        prizeDistributionAmount: 1,
+        // rankDistribution: 1,
+        // prizeDistribution: 1,
+        rankCount: 1,
+        subcategoryDetails: 1,
+        rankPercentage: 1,
+        currentTimeSlot: 1,
+        contestCount: {
+          $filter: {
+            input: "$contestCount",
+            as: "contest",
+            cond: { $eq: ["$$contest.timeslotId", "$currentTimeSlot._id"] }, // Filter based on timeSlots ID
+          },
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "contesthistories",
+        let: {
+          contestId: "$_id",
+          timeslotId: "$currentTimeSlot._id",
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$contestId", "$$contestId"] },
+                  { $eq: ["$timeslotId", "$$timeslotId"] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "contesthistories",
+      },
+    },
+    { $unwind: "$contesthistories" },
+    {
+      $lookup: {
+        from: "users", // The collection where user details are stored
+        localField: "contestCount.slotsFill", // Field containing the array of user IDs
+        foreignField: "_id", // The field in the users collection that matches the IDs
+        as: "contestCount.userDetails", // Output array with populated user details
+      },
+    },
+    {
+      $addFields: {
+        userTypeCounts: {
+          $reduce: {
+            input: "$contestCount.userDetails",
+            initialValue: { userCount: 0, botCount: 0 },
+            in: {
+              userCount: {
+                $cond: [
+                  {
+                    $or: [
+                      { $eq: ["$$this.type", "user"] },
+                      { $not: ["$$this.type"] },
+                    ],
+                  },
+                  { $add: ["$$value.userCount", 1] },
+                  "$$value.userCount",
+                ],
+              },
+              botCount: {
+                $cond: [
+                  { $eq: ["$$this.type", "bot"] },
+                  { $add: ["$$value.botCount", 1] },
+                  "$$value.botCount",
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
+        minutesBetween: {
+          $let: {
+            vars: {
+              startTime: "$currentTimeSlot.startTime",
+              endTime: "$currentTimeSlot.endTime",
+            },
+            in: {
+              $divide: [
+                { $subtract: ["$$endTime", "$$startTime"] }, // Difference in milliseconds
+                1000 * 60, // Convert milliseconds to minutes
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "users",  // Assuming 'users' is the collection that stores user information
+        localField: "contesthistories.slotsFill",  // Match each userId from slotsFill
+        foreignField: "_id",  // Match to the user _id field
+        as: "userDetails"  // Store the matched user details in 'userDetails' field
+      }
+    },
+  ]);
+  const arr = await Promise.all(
+    response.map(async (el) => {
+      const result = await fillBotSlots(el, botUserList);
+      return result;
+    })
+  );
+
+  const dateObj = new Date();
+
+  const consolidatedResults = arr.reduce((acc, el) => {
+    el.bots.forEach((el2) => {
+      const key = `${el.contestId}-${el2.userInfo._id}-${el.timeSlotId}`;
+
+      if (!acc[key]) {
+        // If not, initialize the object
+        acc[key] = {
+          contestId: el.contestId,
+          contestHsitoryId: el.contestHsitoryId,
+          userId: el2.userInfo._id,
+          timeslotId: el.timeSlotId,
+          winningAmount: 0,
+          bids: [],
+          totalAmount: 0,
+        };
+      }
+      dateObj.setSeconds(dateObj.getSeconds() + 25);
+      acc[key].bids.push({
+        Amount: el2.bidinfo.bid || 0,
+        bidTimeDate: dateObj,
+      });
+
+      // Calculate the total amount (you can define how to calculate it)
+      acc[key].totalAmount += el2.bidinfo.bid || 0; // Sum up the bid amounts or any other logic
+    });
+
+    return acc; // Return the accumulator for the next iteration
+  }, {});
+
+  // // Convert the accumulator object back to an array
+  const finalResults = Object.values(consolidatedResults);
+
+  // console.log()
+  const groupedData = finalResults.reduce((acc, item) => {
+    // Create a unique key based on `contestId` and `timeslotId`
+    const key = `${item.contestId}-${item.timeslotId}-${item.contestHsitoryId}`;
+
+    // Check if the group already exists
+    if (!acc[key]) {
+      // Initialize if not present
+      acc[key] = {
+        botBidList: [item],
+      };
+    }
+
+    // Accumulate bids and totalAmount
+    acc[key].botBidList.push(item);
+    return acc;
+  }, {});
+
+  const handleBotsRank = async () => {
+    const entries = Object.entries(groupedData);
+
+    // Process all entries in parallel
+    const actions = entries.map(async ([key, value]) => {
+      const [contestId, timeSlotId, contestHistoryId] = key.split("-");
+      // console.log(contestId, timeSlotId, contestHistoryId);
+      const botBiddingList = value.botBidList;
+      const userId = botBiddingList.map((el) => el.userId);
+      // const totalAmount = botBiddingList.map((el) => el.totalAmount);
+      const totalAmount =botBiddingList.reduce((sum, bid) => sum + (bid.totalAmount || 0), 0)
+
+      console.log(botBiddingList,"botBidList")
+
+      // Insert bot bids if botBiddingList is non-empty
+      if (botBiddingList && botBiddingList.length > 0) {
+        await userContestDetailSchema.insertMany(botBiddingList);
+      }
+
+      // Calculate user rankings
+      const rankings = await calculateUserRankings(contestId, timeSlotId);
+      // console.log(rankings)
+
+      // Update contest history with calculated rankings
+      return contesthistory.findByIdAndUpdate(
+        contestHistoryId,
+        {
+          $set: { ranks: rankings }, // Use $set for setting the ranks field
+          $push: { slotsFill: { $each: userId } }, // Use $push for adding new bids
+          $inc: { totalbidsAmount:totalAmount} // Increment totalAmount by the sum of new bids
+        },
+        { new: true } // Optionally return the updated document
+      );
+    });
+
+    // Await all actions to complete
+    await Promise.all(actions);
+
+    
+    // })
+  };
+
+  // Execute the function and store the response
+  const botResponse = await handleBotsRank();
+
+  return groupedData;
+  //arr
+};
+module.exports = { handaleBots };
