@@ -526,7 +526,7 @@ const maincontestJoin = async (req, res) => {
 const bidding = async (req, res) => {
   const { contestId, timeSlot } = req.params;
   const userId = req.user._id;
-  const { bidAmount } = req.body;
+  const bidAmount = Math.floor(req?.body?.bidAmount);
 
   // const userSocketId = users[userId]?.toString();
   const session = await mongoose.startSession();
