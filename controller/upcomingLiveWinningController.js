@@ -1370,11 +1370,13 @@ const MyBids = async (req, res) => {
         return "Highest and Unique";
       } else if (bid.rank === 1 && bid.duplicateCount !== 1) {
         return "Highest but not Unique";
-      } else if (bid.rank <= lastRank && bid.duplicateCount === 1) {
+      } 
+      else if (bid.rank <= lastRank && bid.duplicateCount === 1) {
         return "Higher and Unique";
       } else if (bid.rank <= lastRank && bid.duplicateCount !== 1) {
         return "Higher but not Unique";
-      } else if (bid.rank > lastRank && bid.duplicateCount === 1) {
+      }
+      else if ( bid.duplicateCount === 1) {
         return "Not Highest but  Unique";
       } else {
         return "Neither Highest nor Unique"
