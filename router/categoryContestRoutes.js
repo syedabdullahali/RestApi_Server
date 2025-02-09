@@ -60,7 +60,7 @@ router.post("/contest/bid/:contestId/:timeSlot",auth.authenticateToken,bidding);
 router.post("/final",auth.authenticateToken,checkAndCompleteMainContests);
 
 router.put("/save/main/contest/:contestId/:subcategoryId/:timeSlotId",auth.authenticateToken,LikemainContest);
-router.put("/notificationAlert/main/contest/:contestId/:subcategoryId",auth.authenticateToken,ActiveNotificationAlert);
+router.put("/notificationAlert/main/contest/:contestId/:subcategoryId/:timeSlotId",auth.authenticateToken,ActiveNotificationAlert);
 
 router.get("/get/single/contest/:contestId/:timeslotId",getsingleContest);
 router.get("/check/user/already/join/:contestId/:timeslotId" ,auth.authenticateToken, getuserContestDetails);

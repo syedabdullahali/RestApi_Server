@@ -3,12 +3,13 @@ const admin = require('firebase-admin');
 const User = require('../model/user/user')
 const serviceAccount = require('../won-by-bid-firebase-adminsdk-ns4jh-f405c499cc.json');
 
-const Notification = require('../model/notification')
+const Notification = require('../model/notification');
+const { sendSingleNotification, sendMultipleNotification } = require('../function/sendNotification');
 
-admin.initializeApp({
+/* admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://<your-project-id>.firebaseio.com",
-});
+  // databaseURL: "https://<your-project-id>.firebaseio.com",
+}) */
 
 router.post('/save-fcm-token', async (req, res) => {
   const { userId, fcmToken } = req.body;
@@ -20,10 +21,18 @@ router.post('/save-fcm-token', async (req, res) => {
   }
 });
 
+
+// i have chagnged notification saving method
 router.post('/send-notification/single', async (req, res) => {
+  // console.log("req.body: ", req.body);
+
   const { userId, title, body } = req.body;
   try {
-    const user = await User.findOne({ userId });
+    await sendSingleNotification(userId, body.name, body.description)
+    // const user = await User.findOne({ userId });
+    /* const user = await User.findById(userId)
+    // console.log("user: ", user);
+
     if (!user || !user.fcmToken) {
       return res.status(404).send({ success: false, message: "User not found or FCM token missing" });
     }
@@ -35,14 +44,21 @@ router.post('/send-notification/single', async (req, res) => {
       },
     };
 
-    const tempDoc = new Notification({ ...req.body, userId: user._id });
+    const tempDoc = new Notification({ ...body, userId: user._id });
+    // console.log("tempDoc: ", tempDoc);
+
     await tempDoc.save()
+    // console.log("message: ", message);
+
     await admin.messaging().send(message);
-    user.notifications.push({ title, body });
-    await user.save();
+    // console.log("result: ", result);
+
+    user.notifications.push(tempDoc?._id);
+    await user.save(); */
 
     res.send({ success: true, message: "Notification sent to single user and saved successfully" });
   } catch (err) {
+    console.log("error on send-notification/single: ", err);
     res.status(500).send({ success: false, message: err.message });
   }
 });
@@ -51,8 +67,10 @@ router.post('/send-notification/single', async (req, res) => {
 router.post('/send-notification/multiple', async (req, res) => {
   const body = req.body;
   try {
+
+    const response = await sendMultipleNotification(name = body.name, description = body.description)
     // Find users based on the provided userIds
-    const users = await User.find();
+    /* const users = await User.find();
     const tokens = users.map(user => user.fcmToken).filter(token => token);
 
     if (!tokens.length) {
@@ -66,32 +84,33 @@ router.post('/send-notification/multiple', async (req, res) => {
       },
     };
     // Send notifications to multiple users
-    const response = await admin.messaging().sendMulticast(message);
+    // const response = await admin.messaging().sendMulticast(message);
+    const response = await admin.messaging().sendEachForMulticast(message);
     // Save notification history in the Notification schema
     const notificationDocs = users.map(user => ({
       userId: user._id,
-      title: body.name,
-      body: body.description,
+      name: body.name,
+      description: body.description,
       sentAt: new Date(),
     }));
-    await Notification.insertMany(notificationDocs);
-    res.send({
-      success: true,
-      message: `Notifications sent: ${response.successCount}, Failed: ${response.failureCount}`,
-    });
+    await Notification.insertMany(notificationDocs); */
+    res.send({ success: true, message: `Notifications sent: ${response.successCount}, Failed: ${response.failureCount}`, });
   } catch (err) {
+    console.log("error: ", err);
+
     res.status(500).send({ success: false, message: err.message });
   }
 });
 
 router.get('/notifications/:userId', async (req, res) => {
+
   const { userId } = req.params;
   try {
-    const user = await Notification.find({ userId: userId });
+    const user = await Notification.find({ userId: userId }).sort({ createdAt: -1 })
     if (!user) {
       return res.status(404).send({ success: false, message: "User not found" });
     }
-    res.send({ success: true, notifications: user.notifications });
+    res.send({ success: true, notifications: user });
   } catch (err) {
     res.status(500).send({ success: false, message: err.message });
   }

@@ -6,12 +6,13 @@ const itemSchema = new mongoose.Schema({
         ref: 'User', // Reference to the User model
         required: true,
     },
+    name: String,
     description: String,
     linkPath: { type: String },
     price: Number,
     type: [{ type: String, enum: ["internal", "external"] }],
     isRead: { type: Boolean, default: true },
 
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model('notification', itemSchema);

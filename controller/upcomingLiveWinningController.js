@@ -526,7 +526,7 @@ const maincontestJoin = async (req, res) => {
 const bidding = async (req, res) => {
   const { contestId, timeSlot } = req.params;
   const userId = req.user._id;
-  const bidAmount = Math.floor(req?.body?.bidAmount);
+  const { bidAmount } = req.body;
 
   // const userSocketId = users[userId]?.toString();
   const session = await mongoose.startSession();
@@ -560,11 +560,42 @@ const bidding = async (req, res) => {
 
     // Fetch wallet and contest details
     const contest = await Contest.findById(contestId).session(session);
+
     if (!contest) {
       await session.abortTransaction();
       session.endSession();
       // req.io.to(userSocketId).emit("contest-error", { message: "Contest not found" });
       return res.status(200).json({ success: false, message: "Contest not found" });
+    }
+
+    
+    const validateBidAmount = (decimalRange, bidAmount) => {
+      // Determine the number of decimal places allowed based on the length of decimalRange
+      const decimalPlaces = decimalRange.length;
+      // Parse the bidAmount and convert it to a number
+      const bid = parseFloat(bidAmount);
+      // If the decimalRange is '0000', '00000', etc., we're expecting to validate the number of decimal places
+      // for the bidAmount.
+      // For example:
+      // '0000' → 0 decimal places (whole numbers only)
+      // '00000' → 1 decimal place (one digit after the decimal point)
+      // Check if the bidAmount matches the required decimal places
+      const bidDecimalPlaces = (bidAmount.toString().split('.')[1] || "").length;
+    
+      // If the number of decimal places is greater than the allowed range, return false
+      if (bidDecimalPlaces > decimalPlaces) {
+        return false; // Bid has more decimal places than allowed
+      }
+    
+      return true; // Bid amount is within the allowed decimal places range
+    };
+
+    if (contest.decimalRange) {    
+      if (!validateBidAmount(contest.decimalRange, bidAmount)) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(200).json({ success: false, message: "Bid amount is not within the valid decimal range" });
+      }
     }
 
     const wallet = await Wallet.findOne({ user: userId }).session(session);
@@ -727,6 +758,7 @@ const bidding = async (req, res) => {
         platformFeePercentage: contest.platformFeePercentage,
         entryAmount: contest.entryAmount,
         prizeDistributionPercentage: contest.prizeDistributionPercentage,
+        rankDistribution: contest.rankDistribution,
         actualSlotFill:contest.slots
       }
     )
@@ -1370,13 +1402,11 @@ const MyBids = async (req, res) => {
         return "Highest and Unique";
       } else if (bid.rank === 1 && bid.duplicateCount !== 1) {
         return "Highest but not Unique";
-      } 
-      else if (bid.rank <= lastRank && bid.duplicateCount === 1) {
+      } else if (bid.rank <= lastRank && bid.duplicateCount === 1) {
         return "Higher and Unique";
       } else if (bid.rank <= lastRank && bid.duplicateCount !== 1) {
         return "Higher but not Unique";
-      }
-      else if ( bid.duplicateCount === 1) {
+      } else if (bid.rank > lastRank && bid.duplicateCount === 1) {
         return "Not Highest but  Unique";
       } else {
         return "Neither Highest nor Unique"
@@ -1512,7 +1542,7 @@ const winingUser = async (contestId, timeslotId) => {
 
 
 const ActiveNotificationAlert = async (req, res) => {
-  const { contestId, subcategoryId } = req.params;
+  const { contestId, subcategoryId,timeSlotId } = req.params;
 
   const userId = req.user._id;
   if (!userId) return;
@@ -1531,6 +1561,7 @@ const ActiveNotificationAlert = async (req, res) => {
     const existingNotificationIndex = user.contestNotification.findIndex(
       (notify) =>
         notify.contestId.toString() === contestId && notify.subcategoryId.toString() === subcategoryId
+      && notify.timeSlotId.toString() === timeSlotId
     );
 
     if (existingNotificationIndex !== -1) {
@@ -1539,8 +1570,7 @@ const ActiveNotificationAlert = async (req, res) => {
 
       return res.status(200).json({ success: true, message: "Notification close successFully", });
     } else {
-      console.log(existingNotificationIndex, 'existingNotificationIndex', user, contestId, subcategoryId)
-      user.contestNotification.push({ contestId, subcategoryId });
+      user.contestNotification.push({ contestId, subcategoryId,timeSlotId });
       await user.save();
 
       return res.status(200).json({ success: true, message: "Notification activated successFully", });

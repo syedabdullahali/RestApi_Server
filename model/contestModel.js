@@ -46,7 +46,8 @@ const contestSchema = new mongoose.Schema(
         ref: "User",
         required: true,
       },
-    ] 
+    ],
+    decimalRange: { type: String, required: true,default:" "},
   },
 
   { timestamps: true }

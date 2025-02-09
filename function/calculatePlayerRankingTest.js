@@ -52,10 +52,11 @@ const calculatePlayerRankingTest = async (contestId, timeSlot,
 const totalColected =  currentFillObj.slotsFill * entryAmount
 
 const platformFeesPercentage = totalColected / currentFillObj.platformFeePercentage
-const totalCurrentPrizeCount =(totalColected  * currentFillObj.prizeDistributionPercentage) / 100
+const totalCurrentPrizeCount =(totalColected  * (currentFillObj.prizeDistributionPercentage/ 100)) 
 const currentWinner =  ( currentFillObj.slotsFill  * currentFillObj.rankPercentage) / 100
 
 
+console.log(totalColected)
 
 
 
@@ -89,11 +90,19 @@ const currentWinner =  ( currentFillObj.slotsFill  * currentFillObj.rankPercenta
     // console.log("totalCurrentPrizeCount",currentWinnerPercentage,
     //   currentWinner,totalCurrentPrizeCount,scallingFactors)
 
-    const currentFillModify = prize.slice(0,Math.ceil(currentWinner)).map((el,i)=>({
-       prizeAmount:Math.floor(el.prizeAmount*scallingFactors),
-       rank:el.rank,
-       users:userContestDetails[i]?.users
-    }))
+    // const currentFillModify = prize.slice(0,Math.ceil(currentWinner)).map((el,i)=>({
+    //    prizeAmount:Math.floor(el.prizeAmount*scallingFactors),
+    //    rank:el.rank,
+    //    users:userContestDetails[i]?.users
+    // }))
+
+    const currentFillModify =   rankDistribution.slice(0,Math.ceil(currentWinner)).map((el,i)=>({
+      prizeAmount:Math.floor(totalCurrentPrizeCount*(el.percentage/100)),
+      rank:el.rank,
+      users:userContestDetails[i]?.users
+   }))
+
+    console.log(prize)
 
      const userList = userContestDetails.reduce((crr,el,i)=>{
         crr.push(el.users.map((el2)=>(

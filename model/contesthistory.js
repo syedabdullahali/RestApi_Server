@@ -10,6 +10,7 @@ const userContestDetailSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: true,
     unique:true,
+    // ref: "timeSheduleSchema",
   },
   bot2isActive:{type:Boolean,default:true},
   companyProfit: { type: Number, default:0 },
@@ -35,6 +36,7 @@ const userContestDetailSchema = new mongoose.Schema({
   currentFill:{type:Array},
   isComplete: { type: Boolean, default: false },
   isContestDeclare: { type: Boolean, default: false },
+  isPrizeDistributed: { type: Boolean, default: false },
   botSession: {
     type: String,
     default: "pending",

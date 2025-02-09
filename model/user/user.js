@@ -5,6 +5,7 @@ const UserSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
+      unique: true // This makes the 'username' field unique
     },
     mobileNumber: {
       type: Number,
@@ -90,6 +91,7 @@ const UserSchema = new mongoose.Schema(
         },
         timeSlotId: {
           type: mongoose.Schema.Types.ObjectId,
+          ref:"timeSheduleSchema"
         },
         subcategoryId: {
           type: mongoose.Schema.Types.ObjectId,
@@ -107,7 +109,15 @@ const UserSchema = new mongoose.Schema(
           type: mongoose.Schema.Types.ObjectId,
           ref: "sub-category",
         },
-      },
+        timeSlotId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref:"timeSheduleSchema"
+        },
+        isNotificationSended:{
+          default:false,
+          type:Boolean,
+       }
+      },   
     ],
     fcmToken: {
       type: String
@@ -115,7 +125,8 @@ const UserSchema = new mongoose.Schema(
     type: { type: String, enum: ["user", "bot", "admin"], default: "user" },
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    joinPrivateContest: [{ type: mongoose.Schema.Types.ObjectId, ref: "privateContest" }]
+    joinPrivateContest: [{ type: mongoose.Schema.Types.ObjectId, ref: "privateContest" }],
+    notifications: [{ type: mongoose.Schema.Types.ObjectId, ref: "notification" }]
   },
   {
     timestamps: true,

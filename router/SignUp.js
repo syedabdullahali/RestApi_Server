@@ -87,6 +87,9 @@ router.post("/login", async (req, res) => {
       { new: true }
     );
 
+    console.log("otp: ", generatedOTP);
+
+
     sendOtpMail(email, generatedOTP);
 
     res.status(200).json({ message: "Login successful" });

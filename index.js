@@ -93,10 +93,10 @@ const routes = [
     path: "/api/wallet",
     func: walletRoute,
   },
-  // {
-  //   path: "/api/notify",
-  //   func: notificationRoute,
-  // },
+  {
+    path: "/api/notify",
+    func: notificationRoute,
+  },
 
 ];
 

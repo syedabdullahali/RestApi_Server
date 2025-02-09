@@ -29,6 +29,8 @@ const Register = async (req, res) => {
     } else {
       const OTP = Math.floor(Math.random() * 900000) + 100000;
 
+
+
       const newUser = new User({
         ...data,
         otp: OTP,
@@ -68,13 +70,26 @@ const Register = async (req, res) => {
 
 
 const Login = async (req, res) => {
-  const { email } = req.body;
+  const { email,name } = req.body;
 
   try {
     const min = 100000;
     const max = 999999;
     const OTP = Math.floor(Math.random() * (max - min + 1)) + min;
     const user = await User.findOne({ email: email });
+
+    if (name) {
+      try {
+        // Check if the new username already exists (excluding the current user)
+        const existingUser = await User.findOne({ username: name});
+  
+        if (existingUser) {
+          return res.status(400).send({ success: false, message: "Username already taken" });
+        }
+      } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+      }
+    }
 
     if (!user) {
       return res
@@ -103,67 +118,58 @@ const Login = async (req, res) => {
 };
 
 const LoginVerify = async (req, res) => {
-  const { email, otp } = req.body;
-  console.log(email, otp)
+  const { email, otp, fcmToken } = req.body;
   try {
-    const user = await User.findOne({
-      email,
-      otp: Number(otp),
-    }).select("-password");
-
+    const user = await User.findOne({ email, otp: Number(otp), }).select("-password");
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid OTP" });
     }
 
-    const token = jwt.sign(
-      { _id: user._id, email: user?.email, role: user?.type },
-      process.env.SECRET_KEY,
-    );
-    const data = {
-      _id: user._id, email: user?.email,
-      name: user?.name, mobileNumber: user?.mobileNumber,
-      profile: user?.profile
-    }
+    user.fcmToken = fcmToken;
+    await user.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      data,
-      token,
-    });
+    const token = jwt.sign({ _id: user._id, email: user?.email, role: user?.type }, process.env.SECRET_KEY,);
+    const data = { _id: user._id, email: user?.email, name: user?.name, mobileNumber: user?.mobileNumber, profile: user?.profile }
+
+    return res.status(200).json({ success: true, message: "Login successful", data, token, });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message, });
   }
 };
 
 const updateUser = async (req, res) => {
   const id = req.user._id;
   const data = req.body;
+  console.log(data)
+
+  // Check if the username is being updated
+  if (data.name) {
+    try {
+      // Check if the new username already exists (excluding the current user)
+      const existingUser = await User.findOne({ name: data.name});
+
+      if (existingUser&&id!==existingUser._id?.toString()) {
+        return res.status(400).send({ success: false, message: "Username already taken" });
+      }
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 
   try {
-    const updatedUser = await User.findByIdAndUpdate(
-      id,
-      { $set: data },
-      { new: true }
-    ).select("-password");
+    const updatedUser = await User.findByIdAndUpdate(id, { $set: data }, { new: true }).select("-password");
 
     if (!updatedUser) {
       return res.status(404).send({ message: "User not found" });
     }
 
-    res
-      .status(202)
-      .send({ success: true, message: "user Updated", data: updatedUser });
+    res.status(202).send({ success: true, message: "User updated", data: updatedUser });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
 const getUserProfile = async (req, res) => {
   const id = req.user._id;
 
@@ -174,14 +180,9 @@ const getUserProfile = async (req, res) => {
       return res.status(404).send({ message: "User not found" });
     }
 
-    res
-      .status(202)
-      .send({ success: true, message: "User Data get Succefull", data: user });
+    res.status(202).send({ success: true, message: "User Data get Succefull", data: user });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    res.status(500).json({ success: false, message: err.message, });
   }
 };
 
