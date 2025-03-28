@@ -50,59 +50,124 @@ const calculatePlayerRankingTest = async (contestId, timeSlot,
 
 
 const totalColected =  currentFillObj.slotsFill * entryAmount
+const totalCurrentPrizeCount =(totalColected  * (currentFillObj.prizeDistributionPercentage/ 100)) 
 
 const platformFeesPercentage = totalColected / currentFillObj.platformFeePercentage
-const totalCurrentPrizeCount =(totalColected  * (currentFillObj.prizeDistributionPercentage/ 100)) 
-const currentWinner =  ( currentFillObj.slotsFill  * currentFillObj.rankPercentage) / 100
+
+const currentWinner =  ( currentFillObj.slotsFill  * (currentFillObj.rankPercentage/100)) 
+
+console.log("totalColected",currentFillObj.slotsFill * entryAmount)
+console.log("totalCurrentPrizeCount" ,totalColected * (currentFillObj.prizeDistributionPercentage/ 100))
+
+console.log("currentFillObj.slotsFill",currentFillObj.slotsFill)
+console.log("currentFillObj.slotsFill",(currentFillObj.rankPercentage/100))
 
 
-console.log(totalColected)
 
+
+
+// console.log(totalColected)
+
+ //  10  slot 
+
+   //3 rank 
+
+  //  1 200
+  //  2 160 
+  //  3 120 
+
+  //  // 5 slot 
+  //  // 1.6
+
+  //  1 200
+
+  //  160*0.6
+
+
+   const currentFillAmount = []
 
 
      const handleScallingFactors = (scallingPercentage) =>{
+
       const rankArr = prize
       let sum =0
     
-      const pointNumber = scallingPercentage - Math.floor(scallingPercentage)
-      const numaricNumber =  Math.floor(scallingPercentage)
+      const pointNumber = scallingPercentage -Math.floor(scallingPercentage) 
+
+      // const pointNumber = scallingPercentage - scallingPercentage
+
+      console.log("pointNumber",pointNumber)
+      console.log("scallingPercentage",scallingPercentage)
+      console.log("Math.ceil(scallingPercentage)",Math.ceil(scallingPercentage))
+
+
+      const numaricNumber =  scallingPercentage
     
       let counterNum =1
+
     
       while(counterNum<=Math.ceil(scallingPercentage)){
+
+
         if(counterNum===Math.ceil(scallingPercentage)){
+
           if(pointNumber>=0){
             sum+= (rankArr[counterNum-1]?.prizeAmount *pointNumber)
+            console.log("sum",sum,rankArr[counterNum-1]?.prizeAmount *pointNumber)
+
+            currentFillAmount.push({prizeAmount:rankArr[counterNum-1]?.prizeAmount *pointNumber,rank:counterNum})
+
           }else{
-            sum+= rankArr[counterNum-1]?.prizeAmount
+            sum+= rankArr[counterNum]-1?.prizeAmount
+            console.log("sum",sum,rankArr[counterNum-1]?.prizeAmount)
+            currentFillAmount.push({prizeAmount:rankArr[counterNum-1]?.prizeAmount,rank:counterNum})
+
+
           }
         }else{
           sum+= rankArr[counterNum-1]?.prizeAmount 
+
+          console.log("sum",sum,rankArr[counterNum-1]?.prizeAmount)
+          currentFillAmount.push({prizeAmount:rankArr[counterNum-1]?.prizeAmount,rank:counterNum})
+
+
         }
+
         counterNum ++
+
+        
       }    
+
+
       return sum
     }
+
     const currentWinnerPercentage = handleScallingFactors(currentWinner)
     
     const scallingFactors = totalCurrentPrizeCount/currentWinnerPercentage
 
+    console.log("scallingFactors",scallingFactors)
+    console.log("scallingFactors",currentWinnerPercentage)
+
+
     // console.log("totalCurrentPrizeCount",currentWinnerPercentage,
     //   currentWinner,totalCurrentPrizeCount,scallingFactors)
+    // const currentFillModify = prize.slice(0,Math.floor(Math.ceil(currentWinner))).map((el,i)=>({
 
-    // const currentFillModify = prize.slice(0,Math.ceil(currentWinner)).map((el,i)=>({
-    //    prizeAmount:Math.floor(el.prizeAmount*scallingFactors),
-    //    rank:el.rank,
-    //    users:userContestDetails[i]?.users
-    // }))
 
-    const currentFillModify =   rankDistribution.slice(0,Math.ceil(currentWinner)).map((el,i)=>({
-      prizeAmount:Math.floor(totalCurrentPrizeCount*(el.percentage/100)),
-      rank:el.rank,
-      users:userContestDetails[i]?.users
-   }))
+    const currentFillModify = currentFillAmount.map((el,i)=>({
+       prizeAmount:Number((el.prizeAmount *scallingFactors).toFixed(2)),
+       rank:el.rank,
+       users:userContestDetails[i]?.users
+    }))
 
-    console.log(prize)
+  //   const currentFillModify =   rankDistribution.slice(0,Math.ceil(currentWinner)).map((el,i)=>({
+  //     prizeAmount:Math.floor(totalCurrentPrizeCount*(el.percentage/100)),
+  //     rank:el.rank,
+  //     users:userContestDetails[i]?.users
+  //  }))
+
+  
 
      const userList = userContestDetails.reduce((crr,el,i)=>{
         crr.push(el.users.map((el2)=>(

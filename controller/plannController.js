@@ -1,82 +1,85 @@
 const mongoose = require("mongoose");
 const Contest = require("../model/contestModel");
-const ContestHistory=require("../model/contesthistory")
-const timeSheduleSchema = require('../model/contestTimeSheduleList')
+const ContestHistory = require("../model/contesthistory");
+const timeSheduleSchema = require("../model/contestTimeSheduleList");
 //assigning single contest for whole day
 const dayWiseContest = async (req, res) => {
-
   // console.log("Hello World")
   const session = await mongoose.startSession();
-  try{
-   session.startTransaction();
+  try {
+    session.startTransaction();
 
-  const contestId = req.params.id;
-  const contest = await Contest.findById(contestId).populate({
-    path: "subcategoryId", // Populate subcategoryId
-    populate: {
-      path: "auctioncategory", // Populate auctioncategory inside subcategory
-      model: "category", // Specify the model for auctioncategory
-    },
-  }).session(session); // Attach session
-  
-  if (contest.timeSlots && contest.timeSlots.length > 0) {
-    return res.status(200).json(contest);
-  }
+    const contestId = req.params.id;
+    const contest = await Contest.findById(contestId)
+      .populate({
+        path: "subcategoryId", // Populate subcategoryId
+        populate: {
+          path: "auctioncategory", // Populate auctioncategory inside subcategory
+          model: "category", // Specify the model for auctioncategory
+        },
+      })
+      .session(session); // Attach session
 
-  if (!contest) {
-    res.status(404).json({ message: "Contest is not Present" });
-  }
+    if (contest.timeSlots && contest.timeSlots.length > 0) {
+      return res.status(200).json(contest);
+    }
 
-  // Extract category duration
-  const duration = contest.subcategoryId.auctioncategory.duration; // e.g., "40 minutes"
+    if (!contest) {
+      res.status(404).json({ message: "Contest is not Present" });
+    }
 
-  if (!duration) {
-    res.status(404).json({ message: "Duration is present" });
-  }
+    // Extract category duration
+    const duration = contest.subcategoryId.auctioncategory.duration; // e.g., "40 minutes"
 
-  const [timeValue, timeUnit] = (duration ?? "").split(" ");
+    if (!duration) {
+      res.status(404).json({ message: "Duration is present" });
+    }
 
-  let timeMultiplier;
+    const [timeValue, timeUnit] = (duration ?? "").split(" ");
 
-  // Determine the time multiplier based on the unit (minutes, hours)
-  if (timeUnit === "minutes" || timeUnit === "minute") {
-    timeMultiplier = 60 * 1000; // 1 minute = 60,000 ms
-  } else if (timeUnit === "hours" || timeUnit === "hour") {
-    timeMultiplier = 60 * 60 * 1000; // 1 hour = 3,600,000 ms
-  } else {
-    return res.status(400).json({ message: "Unsupported time unit" });
-  }
+    let timeMultiplier;
 
-  const startOfDay = new Date();
+    // Determine the time multiplier based on the unit (minutes, hours)
+    if (timeUnit === "minutes" || timeUnit === "minute") {
+      timeMultiplier = 60 * 1000; // 1 minute = 60,000 ms
+    } else if (timeUnit === "hours" || timeUnit === "hour") {
+      timeMultiplier = 60 * 60 * 1000; // 1 hour = 3,600,000 ms
+    } else {
+      return res.status(400).json({ message: "Unsupported time unit" });
+    }
+
+    const startOfDay = new Date();
     // const startOfDay = contest.timeSlots.at(0).startTime;
 
-  // startOfDay.setDate(contest.timeSlots.at(0).startTime)
+    // startOfDay.setDate(contest.timeSlots.at(0).startTime)
 
-  startOfDay.setHours(0, 0, 0, 0);
-  const dayContests = [];
-  let currentStartTime = new Date(startOfDay);
+    startOfDay.setHours(0, 0, 0, 0);
+    const dayContests = [];
+    let currentStartTime = new Date(startOfDay);
 
-  // console.log(startOfDay.toLocaleDateString(),contest.timeSlots.at(0).startTime.toUTCString())
+    // console.log(startOfDay.toLocaleDateString(),contest.timeSlots.at(0).startTime.toUTCString())
 
-  while (currentStartTime.getDate() === startOfDay.getDate()) {
-    const endTime = new Date(
-      currentStartTime.getTime() + timeValue * timeMultiplier
-    ); // Add duration in minutes
-    dayContests.push({
-      startTime: currentStartTime,
-      endTime: endTime,
-      contestId
+    while (currentStartTime.getDate() === startOfDay.getDate()) {
+      const endTime = new Date(
+        currentStartTime.getTime() + timeValue * timeMultiplier
+      ); // Add duration in minutes
+      dayContests.push({
+        startTime: currentStartTime,
+        endTime: endTime,
+        contestId,
+      });
+
+      // Update currentStartTime for next contest
+      currentStartTime = new Date(endTime);
+    }
+
+    dayContests.at(-1);
+    // Add timeSlots to contest
+    contest.startDateTime = startOfDay;
+    contest.endDateTime = dayContests.at(-1).endTime;
+    const insertedTimeSlots = await timeSheduleSchema.insertMany(dayContests, {
+      session,
     });
-
-    // Update currentStartTime for next contest
-    currentStartTime = new Date(endTime);
-  }
-
-  dayContests.at(-1)
-  // Add timeSlots to contest
-  contest.startDateTime = startOfDay;
-  contest.endDateTime =   dayContests.at(-1).endTime
-    const insertedTimeSlots = await timeSheduleSchema.insertMany(dayContests, { session });
 
     contest.timeSlots = insertedTimeSlots.map((el) => ({
       startTime: el.startTime,
@@ -84,7 +87,6 @@ const dayWiseContest = async (req, res) => {
       status: el.status,
       _id: el._id,
     }));
-
 
     // Map through inserted timeSlots to create ContestHistory documents
     const contestHistories = insertedTimeSlots.map((timeSlot) => ({
@@ -97,6 +99,7 @@ const dayWiseContest = async (req, res) => {
       slotsFill: [],
       ranks: [],
       isComplete: false,
+      favorite:[]
     }));
 
     // Insert ContestHistory documents
@@ -106,13 +109,13 @@ const dayWiseContest = async (req, res) => {
     await session.commitTransaction(); // Commit the transaction
     session.endSession();
 
-  res.status(200).json(contest);
-}catch (error){
-  await session.abortTransaction(); // Roll back changes on error
-  session.endSession();
+    res.status(200).json(contest);
+  } catch (error) {
+    await session.abortTransaction(); // Roll back changes on error
+    session.endSession();
 
-  res.status(500).json(error)
-}
+    res.status(500).json(error);
+  }
 };
 
 // Reschedule a specific time slot or stop it from running
@@ -130,9 +133,9 @@ const resheduleAndStop = async (req, res) => {
       },
     });
 
-     await timeSheduleSchema.findOneAndUpdate(
+    await timeSheduleSchema.findOneAndUpdate(
       { contestId, _id: slotId }, // Query criteria
-      { status:action }, // Update data
+      { status: action }, // Update data
       { new: true } // Options (e.g., return the updated document)
     );
 
@@ -202,29 +205,35 @@ const rescheduleContest = async (req, res) => {
 
     // Fetch the contest
     const contest = await Contest.findById(contestId)
-    .populate({
-      path: "subcategoryId", // Populate subcategoryId
-      populate: {
-        path: "auctioncategory", // Populate auctioncategory inside subcategory
-        model: "category", // Specify the model for auctioncategory
-      },
-    })
-    .session(session);
+      .populate({
+        path: "subcategoryId", // Populate subcategoryId
+        populate: {
+          path: "auctioncategory", // Populate auctioncategory inside subcategory
+          model: "category", // Specify the model for auctioncategory
+        },
+      })
+      .session(session);
     if (!contest) {
-      return res.status(404).json({ success:false,message: "Contest not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Contest not found" });
     }
 
     // Parse the new date
     const targetDate = new Date(newDate);
     if (isNaN(targetDate)) {
-      return res.status(400).json({ success:false,message: "Invalid date format provided" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid date format provided" });
     }
     // console.log(contest)
 
     // Fetch the duration
     const duration = contest?.subcategoryId?.auctioncategory?.duration; // e.g., "40 minutes"
     if (!duration) {
-      return res.status(400).json({ success:false, message: "Contest duration is missing" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Contest duration is missing" });
     }
 
     // Parse duration (e.g., "40 minutes")
@@ -235,31 +244,35 @@ const rescheduleContest = async (req, res) => {
     } else if (timeUnit.toLowerCase().startsWith("hour")) {
       timeMultiplier = 60 * 60 * 1000; // 1 hour = 3,600,000 ms
     } else {
-      return res.status(400).json({ success:false, message: "Unsupported time unit in duration" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Unsupported time unit in duration" });
     }
 
     // Set the start of the day for the new date
     const startOfDay = new Date(targetDate);
     startOfDay.setHours(0, 0, 0, 0);
 
-    console.log(startOfDay.toLocaleDateString())
-    
+    // console.log(startOfDay.toLocaleDateString())
+
     const dayContests = [];
     let currentStartTime = new Date(startOfDay);
-    
+
     // Generate time slots for the day
     while (currentStartTime.getDate() === startOfDay.getDate()) {
-      const endTime = new Date(currentStartTime.getTime() + timeValue * timeMultiplier);
-    
+      const endTime = new Date(
+        currentStartTime.getTime() + timeValue * timeMultiplier
+      );
+
       dayContests.push({
         startTime: currentStartTime,
         endTime,
         contestId,
       });
-    
+
       currentStartTime = new Date(endTime); // Update for the next slot
     }
-    
+
     // Fetch existing time slots for the contest
     const existingStartTimes = await timeSheduleSchema.find(
       {
@@ -268,25 +281,30 @@ const rescheduleContest = async (req, res) => {
       },
       { startTime: 1, _id: 0 } // Fetch only startTime for comparison
     );
-    
+
     // Create a Set of existing startTime values for fast lookups
     const existingStartTimesSet = new Set(
       existingStartTimes.map((slot) => slot.startTime.toISOString())
     );
-    
+
     // Filter out slots that already exist
     const newTimeSlots = dayContests.filter(
       (slot) => !existingStartTimesSet.has(slot.startTime.toISOString())
     );
-    
+
     if (newTimeSlots.length === 0) {
       return res
         .status(400)
-        .json({success:false, message: "All time slots already exist. No new slots created." });
+        .json({
+          success: false,
+          message: "All time slots already exist. No new slots created.",
+        });
     }
-    
+
     // Insert the new time slots
-    const insertedTimeSlots = await timeSheduleSchema.insertMany(dayContests, { session });
+    const insertedTimeSlots = await timeSheduleSchema.insertMany(dayContests, {
+      session,
+    });
 
     // Update contest's timeSlots
     contest.timeSlots = insertedTimeSlots.map((el) => ({
@@ -322,7 +340,13 @@ const rescheduleContest = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    res.status(200).json({success:true, message: "Contest rescheduled successfully", contest });
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Contest rescheduled successfully",
+        contest,
+      });
   } catch (error) {
     console.error("Error in rescheduling contest:", error);
     await session.abortTransaction(); // Abort the transaction in case of an error
@@ -333,7 +357,6 @@ const rescheduleContest = async (req, res) => {
     });
   }
 };
-
 
 //
 // const rescheduleContest = async (req, res) => {
@@ -371,7 +394,6 @@ const rescheduleContest = async (req, res) => {
 //     //       oldStartTime.getSeconds()
 //     //     );
 
-
 //     //     if (index === contest.timeSlots.length - 1) {
 //     //       timeSlot.endTime = new Date(
 //     //         targetDate.getFullYear(),
@@ -398,7 +420,7 @@ const rescheduleContest = async (req, res) => {
 //     //       contestId,
 //     //       timeslotId: timeSlot._id
 //     //     });
-        
+
 //     //     if (!contestHistory) {
 //     //       contestHistory = new ContestHistory({
 //     //         contestId,
@@ -420,11 +442,11 @@ const rescheduleContest = async (req, res) => {
 //     if (!duration) {
 //       res.status(404).json({ message: "Duration is present" });
 //     }
-  
+
 //     const [timeValue, timeUnit] = (duration ?? "").split(" ");
-  
+
 //     let timeMultiplier;
-  
+
 //     // Determine the time multiplier based on the unit (minutes, hours)
 //     if (timeUnit === "minutes" || timeUnit === "minute") {
 //       timeMultiplier = 60 * 1000; // 1 minute = 60,000 ms
@@ -433,18 +455,18 @@ const rescheduleContest = async (req, res) => {
 //     } else {
 //       return res.status(400).json({ message: "Unsupported time unit" });
 //     }
-  
+
 //     const startOfDay = new Date();
 //       // const startOfDay = contest.timeSlots.at(0).startTime;
-  
+
 //     // startOfDay.setDate(contest.timeSlots.at(0).startTime)
-  
+
 //     startOfDay.setHours(0, 0, 0, 0);
 //     const dayContests = [];
 //     let currentStartTime = new Date(startOfDay);
-  
+
 //     // console.log(startOfDay.toLocaleDateString(),contest.timeSlots.at(0).startTime.toUTCString())
-  
+
 //     while (currentStartTime.getDate() === startOfDay.getDate()) {
 //       const endTime = new Date(
 //         currentStartTime.getTime() + timeValue * timeMultiplier
@@ -454,25 +476,24 @@ const rescheduleContest = async (req, res) => {
 //         endTime: endTime,
 //         contestId
 //       });
-  
+
 //       // Update currentStartTime for next contest
 //       currentStartTime = new Date(endTime);
 //     }
-  
+
 //     dayContests.at(-1)
 //     // Add timeSlots to contest
 //     contest.startDateTime = startOfDay;
 //     contest.endDateTime =   dayContests.at(-1).endTime
 //       const insertedTimeSlots = await timeSheduleSchema.insertMany(dayContests, { session });
-  
+
 //       contest.timeSlots = insertedTimeSlots.map((el) => ({
 //         startTime: el.startTime,
 //         endTime: el.endTime,
 //         status: el.status,
 //         _id: el._id,
 //       }));
-  
-  
+
 //       // Map through inserted timeSlots to create ContestHistory documents
 //       const contestHistories = insertedTimeSlots.map((timeSlot) => ({
 //         contestId,
@@ -485,14 +506,14 @@ const rescheduleContest = async (req, res) => {
 //         ranks: [],
 //         isComplete: false,
 //       }));
-  
+
 //       // Insert ContestHistory documents
 //       await ContestHistory.insertMany(contestHistories, { session });
 //       await contest.save({ session }); // Use session
-  
+
 //       await session.commitTransaction(); // Commit the transaction
 //       session.endSession();
-  
+
 //     res.status(200).json(contest);
 
 //     res.status(200)
@@ -505,76 +526,139 @@ const rescheduleContest = async (req, res) => {
 //   }
 // };
 
-const getAllScheduleDates = async (req,res)=>{
-try{
-
-const response = await timeSheduleSchema.aggregate([
-  {
-    $match: {
-      contestId: new mongoose.Types.ObjectId(req.params.id), // Match contestId
-    },
-  },
-  {
-    $group: {
-      _id: {
-        $dateToString: {
-          format: "%Y-%m-%d",
-          date: "$startTime",
-          timezone: "Asia/Kolkata", // Set your desired time zone
+const getAllScheduleDates = async (req, res) => {
+  try {
+    const response = await timeSheduleSchema.aggregate([
+      {
+        $match: {
+          contestId: new mongoose.Types.ObjectId(req.params.id), // Match contestId
         },
       },
-    },
-  },
-  {
-    $sort: { _id: 1 }, // Sort dates in ascending order
-  },
-  {
-    $project: {
-      _id: 0,         // Exclude default _id
-      date: "$_id", // Rename grouped field
-    },
-  },
-])
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$startTime",
+              timezone: "Asia/Kolkata", // Set your desired time zone
+            },
+          },
+        },
+      },
+      {
+        $sort: { _id: 1 }, // Sort dates in ascending order
+      },
+      {
+        $project: {
+          _id: 0, // Exclude default _id
+          date: "$_id", // Rename grouped field
+        },
+      },
+    ]);
 
-// console.log(req.params.date)
+    // console.log(req.params.date)
 
-const targetDate = new Date((req.params.date!=="no-date")?req.params.date:response[0].date); // Ensure format: YYYY-MM-DD
+    const targetDate = new Date(
+      req.params.date !== "no-date" ? req.params.date : response[0].date
+    ); // Ensure format: YYYY-MM-DD
 
-// Reset targetDate times to avoid unintended changes
-const startOfDay = new Date(targetDate);
-startOfDay.setHours(0, 0, 0, 0); // Start of the day
+    // Reset targetDate times to avoid unintended changes
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0); // Start of the day
 
-const endOfDay = new Date(targetDate);
-endOfDay.setHours(23, 59, 59, 999); // End of the day
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999); // End of the day
 
-const response2 = await timeSheduleSchema.aggregate([
-  {
-    $match: {
-      contestId: new mongoose.Types.ObjectId(req.params.id),
-      startTime: {
-        $gte: startOfDay, // Match from start of the day
-        $lte: endOfDay    // Match until the end of the day
-      }
-    },
-  },
-  
-]);
+    const response2 = await timeSheduleSchema.aggregate([
+      {
+        $match: {
+          contestId: new mongoose.Types.ObjectId(req.params.id),
+          startTime: {
+            $gte: startOfDay, // Match from start of the day
+            $lte: endOfDay, // Match until the end of the day
+          },
+        },
+      },
+    ]);
 
-response2.map((el)=>{
-  console.log(new Date(el.startTime).toDateString())
-})
+    response2.map((el) => {
+      console.log(new Date(el.startTime).toDateString());
+    });
 
-  return res.status(200).json({
-    dateList:response,
-    data:response2,
-    selectedDate:req.params.date!=="no-date"?req.params.date:response[0].date
-  });
-}catch (error){
-  return res.status(500).json(error)
-}
-}
+    return res.status(200).json({
+      dateList: response,
+      data: response2,
+      selectedDate:
+        req.params.date !== "no-date" ? req.params.date : response[0].date,
+    });
+  } catch (error) {
+    return res.status(500).json(error);
+  }
+};
 
-module.exports = { dayWiseContest, resheduleAndStop, rescheduleContest,
-getAllScheduleDates };
+const getTimeSlotListByHourCategory = async (req, res) => {
+  try {
+    const contestId = req.params.contestId; // e.g., "40 minutes"
 
+    const [timeValue, timeUnit] = (duration ?? "").split(" ");
 
+    let timeMultiplier;
+
+    // Determine the time multiplier based on the unit (minutes, hours)
+    if (timeUnit === "minutes" || timeUnit === "minute") {
+      timeMultiplier = 60 * 1000; // 1 minute = 60,000 ms
+    } else if (timeUnit === "hours" || timeUnit === "hour") {
+      timeMultiplier = 60 * 60 * 1000; // 1 hour = 3,600,000 ms
+    } else {
+      return res.status(400).json({ message: "Unsupported time unit" });
+    }
+
+    const startOfDay = new Date();
+    // const startOfDay = contest.timeSlots.at(0).startTime;
+
+    // startOfDay.setDate(contest.timeSlots.at(0).startTime)
+
+    startOfDay.setHours(0, 0, 0, 0);
+    const dayContests = [];
+    let currentStartTime = new Date(startOfDay);
+
+    // console.log(startOfDay.toLocaleDateString(),contest.timeSlots.at(0).startTime.toUTCString())
+
+    while (currentStartTime.getDate() === startOfDay.getDate()) {
+      const endTime = new Date(
+        currentStartTime.getTime() + timeValue * timeMultiplier
+      ); // Add duration in minutes
+      dayContests.push({
+        startTime: currentStartTime,
+        endTime: endTime,
+        contestId,
+      });
+      // Update currentStartTime for next contest
+      currentStartTime = new Date(endTime);
+    }
+    dayContests.at(-1);
+
+    return res.status(200).json({
+      dateList: response,
+      data: dayContests,
+      selectedDate:
+        req.params.date !== "no-date" ? req.params.date : response[0].date,
+    });
+
+  } catch (error) {
+    res.status(500)
+      .json({
+        success: false,
+        message: error.message || "Something went wrong....",
+        data: error,
+      });
+  }
+};
+
+module.exports = {
+  dayWiseContest,
+  resheduleAndStop,
+  rescheduleContest,
+  getAllScheduleDates,
+  getTimeSlotListByHourCategory,
+};

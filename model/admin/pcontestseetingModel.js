@@ -10,6 +10,8 @@ const PContestShcema = new mongoose.Schema(
     numberof_bids: { type: Number },      // minimum bids
     max_limit_pricepool: { type: Number },    // prize pool limit  
     minimumEntryFees:  { type: Number },  
+    maxPercentageOfBits:{ type: Number },
+    winnerMaxPercent:{ type: Number },
     privateCategory: [
       {
         duration:{ type: String },

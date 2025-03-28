@@ -1,16 +1,16 @@
 const mongoose = require("mongoose");
+const {v4:uuidv4} =  require("uuid")
 
 const UserSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
-      unique: true // This makes the 'username' field unique
+      unique: true 
     },
     mobileNumber: {
       type: Number,
       required: true,
-      unique: true,
+      // unique: true,
     },
     email: {
       type: String,
@@ -126,12 +126,35 @@ const UserSchema = new mongoose.Schema(
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     joinPrivateContest: [{ type: mongoose.Schema.Types.ObjectId, ref: "privateContest" }],
-    notifications: [{ type: mongoose.Schema.Types.ObjectId, ref: "notification" }]
+    notifications: [{ type: mongoose.Schema.Types.ObjectId, ref: "notification" }],
+    referralCode: {
+      type: String,
+      unique: true,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+// UserSchema.pre("save", async function (next) {
+//   if (!this.name) { // Only generate if name is missing
+//     let isUnique = false;
+//     let userName;
+
+//     while (!isUnique) {
+//       userName = `user_${uuidv4()}`;
+//       const existingUser = await mongoose.model("User").findOne({ name: userName });
+//       if (!existingUser) isUnique = true;
+//     }
+
+//     this.name = userName; // Assign unique name
+//   }
+//   next();
+// });
+
+
+
 
 const UserModel = mongoose.model("User", UserSchema);
 

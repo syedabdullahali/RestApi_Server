@@ -322,7 +322,7 @@ const bidding = async (req, res) => {
     }
 
     
-   if (userContestDetail?.bids?.length >= contest.createdUpto) {
+   if ((userContestDetail?.bids?.length-1) >= contest.createdUpto) {
     await session.abortTransaction();
     session.endSession();
     return res.status(400).json({ success: false, message: "Maximum bids reached" });
@@ -349,7 +349,7 @@ const bidding = async (req, res) => {
     const data = await calculatePrivatePlayerRanking(contestId,{
       "winingPercentage":(contest.createdwiningPercentage||0),
       "entryFees":contest.createdEntryFee,
-      "spots":contest.ranks.length ,
+      "spots":contest.ranks.length+1 ,
       "prizedistribution":contest.prizeDistributionPercentage
   })
 
@@ -604,7 +604,6 @@ const PrivateContestCategory = async (userId) => {
     const expiredCategories = new Set();
 
     const now = new Date();
-console.log(contestJoined)
     contestJoined.forEach((contest) => {
 
       if (contest.startDateTime > now) {    
@@ -638,6 +637,7 @@ const GetPrivateContests = async (categoryId, userId,filterObj) => {
     $sort: {createdEntryFee:-1}
   };
   
+
 
 
   if(sortfilterObj?.sortByEntryAmount){
@@ -720,6 +720,8 @@ const GetPrivateContests = async (categoryId, userId,filterObj) => {
 
 const ParticipantCategory = async (userId) => {
   try {
+
+
 
     const userContests = await UserPrivateContestDetails.find({ userId })
       .populate({

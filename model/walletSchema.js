@@ -18,6 +18,10 @@ const walletSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  privateContestAmount:{
+    type: Number,
+    default: 0,
+  },
   rozarPayTrasitionId:{
     type: String,
     default: 0,

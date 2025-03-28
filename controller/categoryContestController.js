@@ -133,6 +133,7 @@ const getContestByType = async (req, res) => {
     console.error(err);
   }
 };
+
 const getContestByTypePagination = async (req, res) => {
   try {
 
@@ -395,7 +396,6 @@ const getContestByTypePagination = async (req, res) => {
       { $count: "count" }
     ]);
 
-    console.log("totalContests[0]?.count", totalContests[0]?.count)
 
     const totalCount = totalContests[0]?.count || 0;
 
@@ -454,6 +454,7 @@ const getAllTimeSlotFirstRankWinner = async (req, res) => {
         },
       },
     ]);
+
     res.status(200).json({ success: true, data: response });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

@@ -10,7 +10,7 @@ admin.initializeApp({
 })
 
 
-exports.sendSingleNotification = async (userId, name, description) => {
+exports.sendSingleNotification = async (userId, name, description,image) => {
     const user = await User.findById(userId)
     const tempDoc = new Notification({ name, description, userId: userId });
 
@@ -19,8 +19,13 @@ exports.sendSingleNotification = async (userId, name, description) => {
         notification: {
             title: name,
             body: description,
+            
         },
     };
+
+    if(image){
+      message.notification.image = image
+    }
 
     user.notifications.push(tempDoc?._id);
 
@@ -31,7 +36,7 @@ exports.sendSingleNotification = async (userId, name, description) => {
     await admin.messaging().send(message);
 }
 
-exports.sendMultipleNotification = async (name, description) => {
+exports.sendMultipleNotification = async (name, description,linkPath,image) => {
 
     const users = await User.find();
 
@@ -44,6 +49,11 @@ exports.sendMultipleNotification = async (name, description) => {
             body: description,
         },
     };
+
+    if(image){
+        message.notification.image = image
+    }
+  
     // Send notifications to multiple users
     // const response = await admin.messaging().sendMulticast(message);
     const response = await admin.messaging().sendEachForMulticast(message);
@@ -53,7 +63,9 @@ exports.sendMultipleNotification = async (name, description) => {
         name: name,
         description: description,
         sentAt: new Date(),
+        linkPath
     }));
+    
     await Notification.insertMany(notificationDocs);
 
     return response

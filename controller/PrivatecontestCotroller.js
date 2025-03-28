@@ -226,6 +226,8 @@ const createSetting = async (req, res) => {
     try {
       const response = await PContestsetting.create(req.body);
 
+      
+
       if (!response) {
         return res.status(400).json({
           success: false,
@@ -247,27 +249,49 @@ const createSetting = async (req, res) => {
     console.error(err);
   }
 };
+
 const updatesetting = async (req, res) => {
   const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({ success: false, message: "ID parameter is required" });
+  }
+
   try {
-    const response = await PContestsetting.findByIdAndUpdate(id, req.body, {
-      new: true,
-    });
+    let response;
+    const isAdd = id.trim().toLowerCase() === "add";
+
+    if (isAdd) {
+      if (Object.keys(req.body).length === 0) {
+        return res.status(400).json({ success: false, message: "Request body cannot be empty" });
+      }
+      delete req.body._id
+      const tempDoc = new PContestsetting(req.body);
+      response = await tempDoc.save();
+    } else {
+      if (!Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ success: false, message: "Invalid contest setting ID" });
+      }
+
+      response = await PContestsetting.findByIdAndUpdate(id, req.body, { new: true }).lean();
+    }
 
     if (!response) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Contest setting Not Updated" });
+      return res.status(404).json({ success: false, message: "Contest setting Not Found or Not Updated" });
     }
-    res.status(201).json({
+
+    res.status(200).json({
       success: true,
-      message: "update contest setting successfully",
+      message: isAdd ? "Contest setting created successfully" : "Contest setting updated successfully",
       data: response,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error updating contest setting:", err);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
+
+
 const getSetting = async (req, res) => {
   try {
     const respo = await PContestsetting.findOne();
@@ -385,11 +409,14 @@ const  joinPrivateContest =async (req,res)=>{
 const sendPrivateContestCalculation = async (req,res)=>{
      const {winingPercentage,entryFees,spots,prizedistribution} = req.body
 
-     const totalWinnerSlot = winingPercentage * ((spots*(prizedistribution/100))/100)
-     const distributedAmount = ((spots*(prizedistribution/100))*entryFees)/totalWinnerSlot
+     const totalWinnerSlot = spots * (winingPercentage /100)
+     const totalAmount = spots *entryFees
 
+     const distributedAmount = (totalAmount *(prizedistribution/100))
+     const perUserDistributionAmount = distributedAmount / totalWinnerSlot; // Divide equally
+      
    try {
-    return res.status(200).json({ seccess: false, data: new Array(Math.floor(totalWinnerSlot)).fill(Math.floor(distributedAmount))  })
+    return res.status(200).json({ seccess: false, data: new Array(Math.floor(totalWinnerSlot)).fill(Number(perUserDistributionAmount.toFixed(2)))  })
   }catch (err) {   
     return res.status(500).json({ seccess: false, data: err });
   }

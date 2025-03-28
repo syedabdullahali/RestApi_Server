@@ -9,6 +9,7 @@ const itemSchema = new mongoose.Schema({
     name: String,
     description: String,
     linkPath: { type: String },
+    paramObj:{type:Object},
     price: Number,
     type: [{ type: String, enum: ["internal", "external"] }],
     isRead: { type: Boolean, default: true },
@@ -16,3 +17,4 @@ const itemSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('notification', itemSchema);
+

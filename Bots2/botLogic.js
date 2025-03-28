@@ -329,7 +329,7 @@ const {covertedToDuplicate,notConverted} =   userBotUnBids.reduce((crr,el,i)=>{
     await  updateDocuments(modifyData)
     const [rankings, currentFill] = await calculatePlayerRanking(modifyData,contestId,timeSlotId,prize,rankDistribution,
       {...currentFillObj,slotsFill:modifyData.length})
-  
+      
       //  Prepare the update data
       if(rankings&&currentFill){
 
@@ -340,12 +340,9 @@ const {covertedToDuplicate,notConverted} =   userBotUnBids.reduce((crr,el,i)=>{
             bot2isActive:false
           },
         };
-      
        await contesthistory.findByIdAndUpdate(contesthistoryId, updateData, {new: true});
-
       }
   }
- 
 }catch(error){
 throw{error:error}
 }

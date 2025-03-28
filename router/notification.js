@@ -68,7 +68,9 @@ router.post('/send-notification/multiple', async (req, res) => {
   const body = req.body;
   try {
 
-    const response = await sendMultipleNotification(name = body.name, description = body.description)
+    const response = await sendMultipleNotification(name = body.title, description = body.description,
+      body.notficationPath
+    )
     // Find users based on the provided userIds
     /* const users = await User.find();
     const tokens = users.map(user => user.fcmToken).filter(token => token);

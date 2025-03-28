@@ -44,9 +44,37 @@ const calculatePrivatePlayerRanking = async (contestId,contestObj) => {
 
   const {winingPercentage,entryFees,spots,prizedistribution} = contestObj
 
-  const totalWinnerSlot = winingPercentage * ((spots*(prizedistribution/100))/100)
-  const distributedAmount = ((spots*(prizedistribution/100))*entryFees)/totalWinnerSlot
-  const rankPrizeDistribution = new Array(Math.floor(totalWinnerSlot)).fill(Math.floor(distributedAmount))  
+  const totalWinnerSlot = spots * (winingPercentage /100)
+  const totalAmount = spots *entryFees
+
+  const distributedAmount = (totalAmount *(prizedistribution/100))
+  const perUserDistributionAmount = distributedAmount / totalWinnerSlot; // Divide equally
+
+  const rankPrizeDistribution =new Array(Math.ceil(totalWinnerSlot)).fill(Number(perUserDistributionAmount.toFixed(2))) 
+  const decimal = totalWinnerSlot -Math.floor(totalWinnerSlot)
+
+
+
+    console.log("totalWinnerSlot",totalWinnerSlot)
+
+
+  rankPrizeDistribution.forEach((el, i,arr) => {
+    console.log(i + 1 ,Math.ceil(totalWinnerSlot))
+    if (i + 1 === Math.ceil(totalWinnerSlot)) {
+      console.log(decimal)
+      arr[i] = el * decimal;
+    }
+  });
+
+  // console.log(rankPrizeDistribution)
+
+
+  // console.log("winingPercentage",winingPercentage)
+  // console.log("entryFees",entryFees)
+  // console.log("spots",spots)
+  // console.log("prizedistribution",prizedistribution)
+
+
 
   const userRank =  userContestDetails.reduce((crr,el,i)=>{
     crr.push(el.users.map((el2)=>(
@@ -66,7 +94,7 @@ const calculatePrivatePlayerRanking = async (contestId,contestObj) => {
 
    rankPrizeDistribution.forEach((winingAmount, i) => {
     if (userRank[i]) {
-      userRank[i].WinningAmount = winingAmount;
+      userRank[i].WinningAmount = Number(winingAmount.toFixed(2));
       userRank[i].isInWiningRange = true;
     }
   });

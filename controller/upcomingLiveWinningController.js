@@ -17,8 +17,10 @@ const SubCategory = require("../model/admin/subCategory");
 const { createContestPipline } = require("../function/contestHelper");
 const contesthistory = require("../model/contesthistory");
 const calculatePlayerRanking = require("../function/calculatePlayerRanking");
-const calculatePlayerRankingTest = require("../function/calculatePlayerRankingTest");
 const contestModel = require("../model/contestModel");
+const handaleDiclareRank = require("../function/declareRank");
+const cashBonus =  require('../model/admin/cashBonus');
+const { handaleCashBonusCheck } = require("../function/handaleCashBonusCheck");
 
 const getUpcomingContest = async (req, res) => {
   try {
@@ -134,8 +136,6 @@ const getWinningContest = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
-
-
 
 const getSubcategoriesWithContests = async (req, res) => {
   const { page, limit, status } = req.query; // Get status from the request query parameters (e.g., 'live', 'upcoming', 'winning')
@@ -265,9 +265,6 @@ const getSubcategoriesWithContests = async (req, res) => {
     });
   }
 };
-
-
-
 
 const maincontestJoin = async (req, res) => {
   const { contestId, timeSlot } = req.params;
@@ -544,6 +541,25 @@ const bidding = async (req, res) => {
       { "timeSlots.$": 1 }
     ).session(session);
 
+    const result = await cashBonus.aggregate([
+      {
+        $match: {
+          expireBonusAmountDate: { $gt: new Date() } // Exclude expired bonuses
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRemainingBonus: { $sum: "$remainingBonusAmount" }
+        }
+      }
+    ]).session(session);
+    
+
+    const bonusCash = result[0]?.totalRemainingBonus || 0;
+
+    console.log("bonusCash",bonusCash)
+
     if (!timecheckObj || currentTime > timecheckObj.timeSlots[0].endTime) {
       await session.abortTransaction();
       session.endSession();
@@ -639,18 +655,28 @@ const bidding = async (req, res) => {
 
     // Deduct wallet balances based on contest type
     if (contest.type === "realCash") {
+
       if (contest.typeCashBonus === "use") {
-        if (wallet.bonusAmount < bonusPrice) {
+
+        if (bonusCash < bonusPrice && wallet.balance < bonusPrice) {
           await session.abortTransaction();
           session.endSession();
-          // req.io.to(userSocketId).emit("contest-walletError", { message: "Insufficient bonus balance" });
-          return res.status(200).json({ success: false, message: "Insufficient bonus balance" });
+          return res.status(200).json({ success: false, message: "Insufficient bonus balance and real balance" });
+        } else if (bonusCash >= bonusPrice){
+          // wallet.bonusAmount -= bonusPrice;
+          await handaleCashBonusCheck(bonusPrice,userId,"used")
+
+          wallet.balance >= payableAmount ? (wallet.balance -= payableAmount) : (wallet.winningbalance -= payableAmount);
+        } else if(wallet.balance >= bonusPrice){
+          // wallet.balance -= bonusPrice;
+          await handaleCashBonusCheck(bonusPrice,userId,"used")
+
+          wallet.balance >= payableAmount ? (wallet.balance -= payableAmount) : (wallet.winningbalance -= payableAmount);
         }
-        wallet.bonusAmount -= bonusPrice;
-        wallet.balance >= payableAmount ? (wallet.balance -= payableAmount) : (wallet.winningbalance -= payableAmount);
 
       } else if (contest.typeCashBonus === "earn") {
-        wallet.bonusAmount += bonusPrice;
+        // wallet.bonusAmount += bonusPrice;
+        await handaleCashBonusCheck(bonusCash,userId,"earn")
         wallet.balance >= entryFee ? (wallet.balance -= entryFee) : (wallet.winningbalance -= entryFee);
       } else {
         wallet.balance >= entryFee ? (wallet.balance -= entryFee) : (wallet.winningbalance -= entryFee);
@@ -686,27 +712,55 @@ const bidding = async (req, res) => {
       await TransactionHistory.insertMany(additionalTransactions, { session });
 
     } else if(contest.type === "bonusCash"){
-      if (wallet.bonusAmount < entryFee) {
+
+      if (bonusCash >= entryFee) {
+        //  wallet.bonusAmount -= entryFee;
+         await handaleCashBonusCheck(entryFee,userId,"used")
+
+        const transactionTemp =  new TransactionHistory( {
+          user: userId,
+          amountType: "bonusAmount",
+          type: "debit",
+          amount: entryFee,
+          description: `Debited ${entryFee} from your Bonus Amount balance.`,
+        })
+        await transactionTemp.save()
+         
+      } else if(wallet.balance >= entryFee){
+         wallet.balance -= entryFee;
+
+        const transactionTemp =  new TransactionHistory(       {
+          user: userId,
+          amountType: "realAmount",
+          type: "debit",
+          amount: entryFee,
+          description: `Insufficient bonus balance Where Deducting Real balance ${entryFee} `,
+       })
+         await transactionTemp.save()
+      }else {
         await session.abortTransaction();
         session.endSession();
-        return res.status(200).json({ success: false, message: "Insufficient bonus balance" });
+        return res.status(200).json({ success: false, message: "Insufficient bonus balance and real balance" });
       }
 
-      wallet.bonusAmount -= entryFee;
-      const transactionTemp =  new TransactionHistory( {
-        user: userId,
-        amountType: "bonusAmount",
-        type: "debit",
-        amount: entryFee,
-        description: `Debited ${entryFee} from your Bonus Amount balance.`,
-      })
-       await transactionTemp.save()
+
     }
 
 
 
     // Update or create user contest details
     let userContestDetail = await userMainContestDetail.findOne({ contestId, userId, timeslotId: timeSlot }).session(session);
+
+    if (userContestDetail?.bids?.length >= contest?.upto) {
+      await session.abortTransaction();
+      session.endSession();
+ 
+      return res
+        .status(401)
+        .json({ success: false, message: `Maximum bids reached (${contest.upto})` });
+    }
+
+
     if (!userContestDetail) {
       userContestDetail = new userMainContestDetail({
         contestId,
@@ -744,38 +798,7 @@ const bidding = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    let updatedMainContestHistory = await mainContestHistory.findOne({ contestId, timeslotId: timeSlot });
-
-    // Call ranking logic asynchronously
-    calculatePlayerRankingTest(
-      contestId,
-      timeSlot,
-      contest?.prizeDistribution,
-      contest?.rankDistribution,
-      {
-        slotsFill:updatedMainContestHistory.userranks.length,
-        rankPercentage: contest.rankPercentage,
-        platformFeePercentage: contest.platformFeePercentage,
-        entryAmount: contest.entryAmount,
-        prizeDistributionPercentage: contest.prizeDistributionPercentage,
-        rankDistribution: contest.rankDistribution,
-        actualSlotFill:contest.slots
-      }
-    )
-      .then(async ([rankings, currentFill]) => {
-        // Ensure we have the latest instance of mainContestHistory
-
-        if (!updatedMainContestHistory) {
-          console.error("mainContestHistory document not found for save operation.");
-          return;
-        }
-        console.log(currentFill)
-
-        updatedMainContestHistory.userranks = rankings;
-        updatedMainContestHistory.currentFill = currentFill;
-        await updatedMainContestHistory.save();
-      })
-      .catch((err) => console.error("Ranking calculation failed", err));
+    handaleDiclareRank(contestId,timeSlot,contest)
 
     return res.status(200).json({ success: true, message: "Bid placed successfully" });
   } catch (error) {
@@ -836,7 +859,7 @@ const getsingleContest = async (req, res) => {
         .json({ success: false, message: "Timeslot not found in contest" });
     }
 
-    console.log("contesthistory", contesthistory)
+    // console.log("contesthistory", contesthistory)
 
     res.status(200).json({
       success: true,
@@ -1335,7 +1358,7 @@ const LikemainContest = async (req, res) => {
 
   try {
     const user = await UserModel.findById(userId);
-    const contest = await contestModel.findById(contestId)
+    const contest = await contesthistory.findOne({timeslotId:timeSlotId})
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -1396,23 +1419,63 @@ const MyBids = async (req, res) => {
       timeslotId: timeSlotId,
     }).populate('contestId');
 
-    function assignRankLabel(bid) {
-      const lastRank = response.contestId.rankDistribution?.at(-1)?.rank
-      if (bid.rank === 1 && bid.duplicateCount === 1) {
-        return "Highest and Unique";
-      } else if (bid.rank === 1 && bid.duplicateCount !== 1) {
-        return "Highest but not Unique";
-      } else if (bid.rank <= lastRank && bid.duplicateCount === 1) {
-        return "Higher and Unique";
-      } else if (bid.rank <= lastRank && bid.duplicateCount !== 1) {
-        return "Higher but not Unique";
-      } else if (bid.rank > lastRank && bid.duplicateCount === 1) {
-        return "Not Highest but  Unique";
-      } else {
-        return "Neither Highest nor Unique"
-      }
 
+
+    // function assignRankLabel(bid,currentFillObj) {
+    //   // const lastRank = response.contestId.rankDistribution?.at(-1)?.rank
+
+    //   const lastRank = Math.ceil( currentFillObj.slotsFill  * (currentFillObj.rankPercentage/100)) 
+
+    //   console.log("bid.rank",bid.rank,"bid.duplicateCount",bid.duplicateCount,"lastRank",lastRank)
+
+    //   if (bid.rank === 1 && bid.duplicateCount === 1) {
+    //     return "Highest and Unique";
+    //   } else if (bid.rank === 1 && bid.duplicateCount !== 1) {
+    //     return "Highest but not Unique";
+    //   } else if (bid.rank <= lastRank && bid.duplicateCount === 1) {
+    //     return "Higher and Unique";
+    //   } else if (bid.rank <= lastRank && bid.duplicateCount !== 1) {
+    //     return "Higher but not Unique";
+    //   }
+    //    else if (bid.rank > lastRank && bid.duplicateCount === 1) {
+    //     return "Unique but not Highest ";
+    //   } else {
+    //     return "Neither Highest nor Unique"
+    //   }
+    // }
+
+    function assignRankLabel (bid,currentFillObj,rank1bidNo) {
+      const lastRank = Math.ceil( currentFillObj.slotsFill  * (currentFillObj.rankPercentage/100)) 
+      // rank 1 
+      if(bid.rank===1&&bid.duplicateCount===1){//ok
+        return "Highest and Unique 🏆"; 
+        // case  winner top and uniq only for rank 1
+      }  else if(bid.rank>1&& bid.rank>lastRank&& bid.duplicateCount!==1&&bid.bid>rank1bidNo){ //ok 
+        return "Highest but not Unique";
+       }
+      else if(bid.rank<=lastRank&&bid.duplicateCount===1&&bid.bid<rank1bidNo){//ok
+        return "Unique but not Highest (Winning🏆)"
+        // case : compare in number sequnace and uniq and wining range 
+        // if bid in below rank 1 bid number  in winning range and uniq  then it would be
+      } else if(bid.rank>1&& bid.rank<=lastRank&& bid.duplicateCount!==1&&bid.bid>rank1bidNo){ //ok 
+        return "Highest but not Unique (Winning🏆)";
+     }
+      else if(bid.rank<=lastRank&&bid.duplicateCount!==1&&bid.bid<rank1bidNo){// ok
+          return "Neither Highest nor Unique (Winning🏆)";
+     // case : compare in number sequnace and duplicate and wining range 
+    // if bid in below rank 1 bid number and duplicate and within the range
+      } else if(bid.rank>lastRank&&bid.duplicateCount===1&&bid.bid<rank1bidNo){ // ok 
+        return "Unique but not Highest"
+        //case: compare in rank sequnace  
+    // below rank 1 bid number and uniq 
+      } 
+      else{
+          return "Neither Highest nor Unique"
+      }
     }
+
+
+    response.contestId.slots
 
     if (!response)
       return res
@@ -1422,7 +1485,12 @@ const MyBids = async (req, res) => {
       success: true, data:
         response.userranks.filter((el) => el.userId.toString() === userId).map((el) => {
           return {
-            bidStatus: assignRankLabel(el, response.contestId.slots),
+            bidStatus: assignRankLabel(el, {
+              slotsFill:response.userranks.length,
+              rankPercentage:response.contestId.rankPercentage
+            },
+            response.userranks[0].bid
+          ),
             bid: el.bid,
             biddingTime: el.biddingTime
           }

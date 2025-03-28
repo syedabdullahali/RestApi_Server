@@ -3,14 +3,17 @@ const userKyc = require("../model/userKyc");
 const KYC = require("../model/userKyc");
 const Withdraw = require("../model/widthrawhistory");
 const moment = require("moment");
+
 const isValidPAN = (panNumber) => {
   const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
   return panRegex.test(panNumber);
 };
+
 const isValidAadhaar = (aadhaarNumber) => {
   const aadhaarRegex = /^[0-9]{12}$/;
   return aadhaarRegex.test(aadhaarNumber);
 }
+
 exports.CreateKYC = async (req, res) => {
   const { _id } = req.user;
   const data = req.body;

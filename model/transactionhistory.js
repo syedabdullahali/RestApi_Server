@@ -20,12 +20,7 @@ const userTransactionHistorySchema = new mongoose.Schema(
     amount: { type: Number },
     description: { type: String },
   },
-  {
-    timeseries: true,
-    timestamps: true
-  }
+  { timeseries: true, timestamps: true }
 );
 
-module.exports = mongoose.model("transaction_history",
-  userTransactionHistorySchema
-  ,);
+module.exports = mongoose.model("transaction_history", userTransactionHistorySchema,);
