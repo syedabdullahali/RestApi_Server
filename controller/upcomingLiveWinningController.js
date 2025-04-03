@@ -541,22 +541,49 @@ const bidding = async (req, res) => {
       { "timeSlots.$": 1 }
     ).session(session);
 
-    const result = await cashBonus.aggregate([
-      {
-        $match: {
-          expireBonusAmountDate: { $gt: new Date() } // Exclude expired bonuses
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRemainingBonus: { $sum: "$remainingBonusAmount" }
-        }
-      }
-    ]).session(session);
+    // const result = await cashBonus.aggregate([
+    //   {
+    //     $match: {
+    //       expireBonusAmountDate: { $gt: new Date() } // Exclude expired bonuses
+    //     }
+    //   },
+    //   {
+    //     $group: {
+    //       _id: null,
+    //       totalRemainingBonus: { $sum: "$remainingBonusAmount" }
+    //     }
+    //   }
+    // ]).session(session);
+
+     const responseCashBonus = await cashBonus.aggregate([
+              {
+                $match: {
+                  user: new mongoose.Types.ObjectId(userId), // Match the specific user
+                },
+              },
+              {
+              $group: {
+                _id: null, // Or group by another field if needed
+                totalNonExpiredBonusAmount: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $gte: [
+                          "$expireBonusAmountDate", // Check if not expired
+                          new Date(),
+                        ],
+                      },
+                      "$remainingBonusAmount", // Add amount if valid
+                      0, // Otherwise, add 0
+                    ],
+                  },
+                },
+              }
+              }
+            ])
     
 
-    const bonusCash = result[0]?.totalRemainingBonus || 0;
+    const bonusCash = responseCashBonus[0]?.totalNonExpiredBonusAmount || 0;
 
     console.log("bonusCash",bonusCash)
 
@@ -654,9 +681,12 @@ const bidding = async (req, res) => {
     }
 
     // Deduct wallet balances based on contest type
+
     if (contest.type === "realCash") {
 
-      if (contest.typeCashBonus === "use") {
+      if (contest.typeCashBonus === "use" || !contest?.typeCashBonus?.trim() ) {
+
+        console.log(bonusPrice,"bonusPrice................",contest.type,contest.typeCashBonus)
 
         if (bonusCash < bonusPrice && wallet.balance < bonusPrice) {
           await session.abortTransaction();
@@ -664,6 +694,7 @@ const bidding = async (req, res) => {
           return res.status(200).json({ success: false, message: "Insufficient bonus balance and real balance" });
         } else if (bonusCash >= bonusPrice){
           // wallet.bonusAmount -= bonusPrice;
+          console.log(bonusCash >= bonusPrice,bonusCash , bonusPrice)
           await handaleCashBonusCheck(bonusPrice,userId,"used")
 
           wallet.balance >= payableAmount ? (wallet.balance -= payableAmount) : (wallet.winningbalance -= payableAmount);

@@ -1,8 +1,14 @@
+const { default: mongoose } = require('mongoose');
 const CashBonus =  require('../model/admin/cashBonus')
 const handaleCashBonusCheck = async (requiredAmount,user,useType) => {
     // console.log("requiredAmount",requiredAmount)
     try {
       const selectedBonuses = await CashBonus.aggregate([
+        {
+                        $match: {
+                          user: new mongoose.Types.ObjectId(user), // Match the specific user
+                        },
+                      },
         { $match: { remainingBonusAmount: { $gt: 0 } } }, // Only consider vouchers with balance
         { $sort: { remainingBonusAmount: -1, bonusAmountDate: -1 } }, // Highest balance first
         {
