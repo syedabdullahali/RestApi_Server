@@ -1479,29 +1479,30 @@ const MyBids = async (req, res) => {
       const lastRank = Math.ceil( currentFillObj.slotsFill  * (currentFillObj.rankPercentage/100)) 
       // rank 1 
       if(bid.rank===1&&bid.duplicateCount===1){//ok
-        return "Highest and Unique 🏆"; 
+        return "High🏆"; 
         // case  winner top and uniq only for rank 1
       }  else if(bid.rank>1&& bid.rank>lastRank&& bid.duplicateCount!==1&&bid.bid>rank1bidNo){ //ok 
-        return "Highest but not Unique";
+        return "High and Same ";
        }
+       else if(bid.rank>1&& bid.rank<=lastRank&& bid.duplicateCount!==1&&bid.bid>rank1bidNo){ //ok 
+        return "High and Same (Winning🏆)";
+     } else if(bid.rank>lastRank&&bid.duplicateCount===1&&bid.bid<rank1bidNo){ // ok 
+        return "Low"
+      //case: compare in rank sequnace  
+  // below rank 1 bid number and uniq 
+    } 
       else if(bid.rank<=lastRank&&bid.duplicateCount===1&&bid.bid<rank1bidNo){//ok
-        return "Unique but not Highest (Winning🏆)"
+        return "Low (Winning🏆)"
         // case : compare in number sequnace and uniq and wining range 
         // if bid in below rank 1 bid number  in winning range and uniq  then it would be
-      } else if(bid.rank>1&& bid.rank<=lastRank&& bid.duplicateCount!==1&&bid.bid>rank1bidNo){ //ok 
-        return "Highest but not Unique (Winning🏆)";
-     }
+      } 
       else if(bid.rank<=lastRank&&bid.duplicateCount!==1&&bid.bid<rank1bidNo){// ok
-          return "Neither Highest nor Unique (Winning🏆)";
+          return "Low and Same (Winning🏆)";
      // case : compare in number sequnace and duplicate and wining range 
     // if bid in below rank 1 bid number and duplicate and within the range
-      } else if(bid.rank>lastRank&&bid.duplicateCount===1&&bid.bid<rank1bidNo){ // ok 
-        return "Unique but not Highest"
-        //case: compare in rank sequnace  
-    // below rank 1 bid number and uniq 
-      } 
+      }
       else{
-          return "Neither Highest nor Unique"
+          return "Low and Same"
       }
     }
 
