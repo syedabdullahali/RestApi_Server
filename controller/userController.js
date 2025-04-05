@@ -72,7 +72,7 @@ const Register = async (req, res) => {
     } else {
       const OTP = Math.floor(Math.random() * 900000) + 100000;
 
-      delete data.name
+       data.name=""
         // console.log( data)
       const newUser = new User({
         ...data,
