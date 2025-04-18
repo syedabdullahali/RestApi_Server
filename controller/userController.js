@@ -59,6 +59,7 @@ const Register = async (req, res) => {
           const res =  await response.save()
           latestCounter=res.sequence_value
          }
+
         
          const referralCode = generateReferralCode();
 
@@ -72,8 +73,11 @@ const Register = async (req, res) => {
     } else {
       const OTP = Math.floor(Math.random() * 900000) + 100000;
 
-      delete data.name
+       data.name=""
         // console.log( data)
+
+        console.log("existingUser",existingUser)
+
       const newUser = new User({
         ...data,
         otp: OTP,
@@ -920,7 +924,7 @@ const getUserDashbordDetailToApp = async (req, res) => {
   const categoryId = req.params.categoryId || "all"
   const userIdToMatch = new mongoose.Types.ObjectId(req.params.id || req.user._id)
 
-  console.log("userIdToMatch",userIdToMatch)
+  // console.log("userIdToMatch",userIdToMatch)
 
   const response = await userBidDetails.aggregate([
     {

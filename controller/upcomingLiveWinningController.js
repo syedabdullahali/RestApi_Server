@@ -21,6 +21,7 @@ const contestModel = require("../model/contestModel");
 const handaleDiclareRank = require("../function/declareRank");
 const cashBonus =  require('../model/admin/cashBonus');
 const { handaleCashBonusCheck } = require("../function/handaleCashBonusCheck");
+const timeSlotSchema = require("../model/contestTimeSheduleList")
 
 const getUpcomingContest = async (req, res) => {
   try {
@@ -536,11 +537,18 @@ const bidding = async (req, res) => {
     } */
 
     // Fetch contest and timeslot details
-    const timecheckObj = await Contest.findOne(
-      { _id: contestId, "timeSlots._id": timeSlot },
-      { "timeSlots.$": 1 }
-    ).session(session);
+      
+    // const timecheckObj = await Contest.findOne(
+    //   { _id: contestId, "timeSlots._id": timeSlot },
+    //   { "timeSlots.$": 1 }
+    // ).session(session);
 
+    const timeSlotObj =await timeSlotSchema.findOne({
+      _id:timeSlot,
+      contestId:contestId
+    })
+
+    const timecheckObj = {timeSlots:[timeSlotObj]}
     // const result = await cashBonus.aggregate([
     //   {
     //     $match: {
@@ -869,21 +877,25 @@ const getuserContestDetails = async (req, res) => {
 const getsingleContest = async (req, res) => {
   const { contestId, timeslotId } = req.params;
   try {
-    const contest = await Contest.findById(contestId).populate("subcategoryId");
 
     const contesthistory = await mainContestHistory.findOne({
       contestId: contestId,
       timeslotId: timeslotId,
-    });
+    }).populate([
+      { path: 'timeslotId' },
+      { 
+        path: 'contestId',
+        populate: { path: 'subcategoryId' } // 🟢 use `populate` instead of second `path`
+      }
+    ]);;
 
-    if (!contest) {
+    if (!contesthistory) {
       return res
         .status(200)
         .json({ success: false, message: "Contest not found" });
     }
-    const currentTimeSlot = contest.timeSlots.find(
-      (slot) => slot._id.toString() === timeslotId.toString()
-    );
+    const currentTimeSlot = contesthistory.timeslotId;
+
     if (!currentTimeSlot) {
       return res
         .status(404)
@@ -895,7 +907,7 @@ const getsingleContest = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        ...contest.toObject(),
+        ...contesthistory.toObject().contestId,
         timeSlots: currentTimeSlot,
         history: contesthistory,
         currentFill: contesthistory?.currentFill,

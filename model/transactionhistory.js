@@ -9,12 +9,12 @@ const userTransactionHistorySchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['credit', 'debit', 'withdraw', 'winning'],
+      enum: ['credit', 'debit', 'withdraw', 'winning','privateContestWithdraw'],
       required: true
     },
     amountType: {
       type: String,
-      enum: ['realAmount', 'bonusAmount', 'gstDeduct', 'tdsDeduct', 'referral'],
+      enum: ['realAmount', 'bonusAmount', 'gstDeduct', 'tdsDeduct', 'referral',"tax"],
       required: true
     },
     amount: { type: Number },

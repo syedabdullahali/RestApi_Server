@@ -3,6 +3,8 @@ const Contest = require("../model/contestModel");
 const ContestHistory = require("../model/contesthistory");
 const timeSheduleSchema = require("../model/contestTimeSheduleList");
 //assigning single contest for whole day
+const { DateTime } = require("luxon");
+
 const dayWiseContest = async (req, res) => {
   // console.log("Hello World")
   const session = await mongoose.startSession();
@@ -48,7 +50,10 @@ const dayWiseContest = async (req, res) => {
       return res.status(400).json({ message: "Unsupported time unit" });
     }
 
-    const startOfDay = new Date();
+    const startOfDayIST = DateTime.now().setZone("Asia/Kolkata").startOf("day");
+
+    // Convert Luxon's DateTime object to a native JavaScript Date
+    const startOfDay = new Date(startOfDayIST.toISO());
     // const startOfDay = contest.timeSlots.at(0).startTime;
 
     // startOfDay.setDate(contest.timeSlots.at(0).startTime)

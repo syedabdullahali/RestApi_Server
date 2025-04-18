@@ -112,33 +112,18 @@ console.log("currentFillObj.slotsFill",(currentFillObj.rankPercentage/100))
         if(counterNum===Math.ceil(scallingPercentage)){
 
           if(pointNumber>=0){
-            sum+= (rankArr[counterNum-1]?.prizeAmount *pointNumber)
-            console.log("sum",sum,rankArr[counterNum-1]?.prizeAmount *pointNumber)
-
-            currentFillAmount.push({prizeAmount:rankArr[counterNum-1]?.prizeAmount *pointNumber,rank:counterNum})
-
+            sum+= (rankArr[counterNum-1]?.prizeAmount *(pointNumber||1))
+            currentFillAmount.push({prizeAmount:(rankArr[counterNum-1]?.prizeAmount *(pointNumber||1)),rank:counterNum})
           }else{
             sum+= rankArr[counterNum]-1?.prizeAmount
-            console.log("sum",sum,rankArr[counterNum-1]?.prizeAmount)
             currentFillAmount.push({prizeAmount:rankArr[counterNum-1]?.prizeAmount,rank:counterNum})
-
-
           }
         }else{
           sum+= rankArr[counterNum-1]?.prizeAmount 
-
-          console.log("sum",sum,rankArr[counterNum-1]?.prizeAmount)
           currentFillAmount.push({prizeAmount:rankArr[counterNum-1]?.prizeAmount,rank:counterNum})
-
-
         }
-
         counterNum ++
-
-        
       }    
-
-
       return sum
     }
 
@@ -196,3 +181,7 @@ console.log("currentFillObj.slotsFill",(currentFillObj.rankPercentage/100))
  };
 
 module.exports = calculatePlayerRankingTest
+
+// (node:32012) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 disconnect listeners added to [Socket].
+//  MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+// (Use `node --trace-warnings ...` to show where the warning was created)
