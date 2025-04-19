@@ -13,8 +13,6 @@ const UserSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: true,
-      unique: true,
     },
     profile: {
       type: String
@@ -22,6 +20,9 @@ const UserSchema = new mongoose.Schema(
     otp: {
       type: Number,
       // required: true,
+    },
+    sessionId:{
+     type:String
     },
     password: {
       type: String,

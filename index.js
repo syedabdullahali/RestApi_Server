@@ -31,6 +31,7 @@ const referralRoutes = require('./router/referal');
 const referralControllerRoutes = require('./router/referalController');
 const bankDetailRoutes = require('./router/bankDetail');
 const widthrawSettingRoutes = require('./router/widthrawSetting');
+const sendOptRoutes = require('./router/sendOpt');
 
 
 const routes = [
@@ -126,6 +127,10 @@ const routes = [
     path: "/api/widthrawSetting",
     func: widthrawSettingRoutes,
   },
+  {
+    path: "/api/otp",
+    func: sendOptRoutes,
+  }
 ];
 
 
@@ -137,9 +142,9 @@ const PORT = process.env.PORT || 5000;
 
 mongoose.connect(process.env.MONGO_DB_URI)
   .then(async () => {
-    console.log("Database connected");
     server.listen(PORT, () => {
       console.log("Local host running on port ", 5000);
+      console.log("Database connected");
     });
   })
   .catch((error) => {

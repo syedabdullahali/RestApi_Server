@@ -17,6 +17,7 @@ const Transaction = require("../model/Transaction");
 const { verifySignature } = require("../function/razorPay");
 const referalCounter = require("../model/user/referalCount")
 const referalController = require("../model/referalController"); 
+const otpController = require('./sendOTP');
 
 require("dotenv").config()
 
@@ -36,13 +37,14 @@ const generateReferralCode = () => {
 
 
 const Register = async (req, res) => {
+
   const data = req.body;
   const session = await mongoose.startSession();
 
   try {
     
     session.startTransaction();
-    const existingUser = await User.findOne({ email: data.email }).session(
+    const existingUser = await User.findOne({ mobileNumber: data.mobileNumber }).session(
       session
     );
 
@@ -71,19 +73,16 @@ const Register = async (req, res) => {
         return;
       }
     } else {
-      const OTP = Math.floor(Math.random() * 900000) + 100000;
 
-       data.name=""
-        // console.log( data)
-
-        console.log("existingUser",existingUser)
 
       const newUser = new User({
         ...data,
-        otp: OTP,
-        referralCode:referralCode+""+latestCounter
+        referralCode:referralCode+""+latestCounter,
+        name:"",
+        email:""
       });
-      sendOTP(data.email, OTP);
+
+      console.log(newUser)
 
       await newUser.save({ session });
 
@@ -95,6 +94,7 @@ const Register = async (req, res) => {
       });
 
       await wallet.save({ session });
+      const sessionId =  await otpController.sendOTP(data.mobileNumber)
 
       await session.commitTransaction();
       session.endSession();
@@ -102,8 +102,9 @@ const Register = async (req, res) => {
       return res.status(201).json({
         success: true,
         message: "User created successfully",
-        data: newUser,
+        sessionId
       });
+
     }
   } catch (error) {
     console.log(error)
@@ -119,13 +120,12 @@ const Register = async (req, res) => {
 
 
 const Login = async (req, res) => {
-  const { email, name } = req.body;
+  const { mobileNumber, name } = req.body;
 
   try {
-    const min = 100000;
-    const max = 999999;
-    const OTP = Math.floor(Math.random() * (max - min + 1)) + min;
-    const user = await User.findOne({ email: email });
+
+    const user = await User.findOne({ mobileNumber: mobileNumber });
+    const sessionId =  await otpController.sendOTP(mobileNumber)
 
     if (name) {
       try {
@@ -143,20 +143,16 @@ const Login = async (req, res) => {
     if (!user) {
       return res
         .status(401)
-        .json({ success: false, message: "Invalid Email credentials" });
+        .json({ success: false, message: "Invalid Mobile Number credentials" });
     }
-    await User.findByIdAndUpdate(user._id, { otp: OTP }, { new: true });
-    sendOTP(email, OTP);
+    await User.findByIdAndUpdate(user._id, { sessionId: sessionId }, { new: true });
 
-    const data = {
-      _id: user._id,
-      email: user.email,
-      otp: OTP,
-    };
     return res.status(200).json({
       success: true,
-      message: "OTP has been sent on you email ",
-      data: data,
+      message: "OTP has been sent on you mobile Number ",
+      data: {
+        sessionId:sessionId
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -167,9 +163,16 @@ const Login = async (req, res) => {
 };
 
 const LoginVerify = async (req, res) => {
-  const { email, otp, fcmToken } = req.body;
+  const { mobileNumber, otp, fcmToken, sessionId } = req.body;
   try {
-    const user = await User.findOne({ email, otp: Number(otp), }).select("-password");
+    const otpResult = await otpController.verifyOTPFactor(sessionId, otp);
+    
+    if (!otpResult.success) {
+      return res.status(200).json({ success: false, message: otpResult.message });
+    }
+
+    const user = await User.findOne({ mobileNumber, sessionId }).select("-password");
+
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid OTP" });
     }
@@ -177,15 +180,28 @@ const LoginVerify = async (req, res) => {
     user.fcmToken = fcmToken;
     await user.save();
 
-    const token = jwt.sign({ _id: user._id, email: user?.email, role: user?.type,referalCode:user?.referralCode||"" }, process.env.SECRET_KEY,);
-    const data = { _id: user._id, email: user?.email, name: user?.name, mobileNumber: user?.mobileNumber, profile: user?.profile }
+    const token = jwt.sign(
+      { _id: user._id, mobileNumber: user.mobileNumber, role: user.type, referalCode: user.referralCode || "" },
+      process.env.SECRET_KEY
+    );
 
-    return res.status(200).json({ success: true, message: "Login successful", data, token, });
+    const data = {
+      _id: user._id,
+      mobileNumber: user.mobileNumber,
+      name: user.name,
+      profile: user.profile,
+      otpstatus: otpResult.message,
+    };
+
+    return res.status(200).json({ success: true, message: "Login successful", data, token });
+
   } catch (error) {
-    console.log(error)
-    res.status(500).json({ success: false, message: error.message, });
+    console.log(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
 
 const updateUser = async (req, res) => {
   const id = req.user._id;
