@@ -437,25 +437,35 @@ const MyBids = async (req, res) => {
     const response = await PrivateContest.findById(contestId);
 
 
-
-    function assignRankLabel(bid) {
-      const lastRank  = Math.floor(response.createdSlots*(response.createdwiningPercentage/100))
-      // console.log(bid)
-
-      if (bid.rank === 1 && bid.duplicateCount === 1) {
-        return "Highest and Unique";
-      } else if (bid.rank === 1 && bid.duplicateCount !== 1) {
-        return "Highest but not Unique";
-      } else if (bid.rank <= lastRank && bid.duplicateCount === 1) {
-        return "Higher and Unique";
-      } else if (bid.rank <= lastRank && bid.duplicateCount !== 1) {
-        return "Higher but not Unique";
-      } else if (bid.rank > lastRank && bid.duplicateCount === 1) {
-        return "Not Highest but  Unique";
-      } else {
-        return "Neither Highest nor Unique"
+    function assignRankLabel (bid,rank1bidNo) {
+      const lastRank = Math.ceil( response.createdSlots  * (response.createdwiningPercentage/100)) 
+      // rank 1 
+      if(bid.rank===1&&bid.duplicateCount===1){//ok
+        return "High🏆"; 
+        // case  winner top and uniq only for rank 1
+      }  else if(bid.rank>1&& bid.rank>lastRank&& bid.duplicateCount!==1&&bid.bid>rank1bidNo){ //ok 
+        return "High and Same ";
+       }
+       else if(bid.rank>1&& bid.rank<=lastRank&& bid.duplicateCount!==1&&bid.bid>rank1bidNo){ //ok 
+        return "High and Same (Winning🏆)";
+     } else if(bid.rank>lastRank&&bid.duplicateCount===1&&bid.bid<rank1bidNo){ // ok 
+        return "Low"
+      //case: compare in rank sequnace  
+  // below rank 1 bid number and uniq 
+    } 
+      else if(bid.rank<=lastRank&&bid.duplicateCount===1&&bid.bid<rank1bidNo){//ok
+        return "Low (Winning🏆)"
+        // case : compare in number sequnace and uniq and wining range 
+        // if bid in below rank 1 bid number  in winning range and uniq  then it would be
+      } 
+      else if(bid.rank<=lastRank&&bid.duplicateCount!==1&&bid.bid<rank1bidNo){// ok
+          return "Low and Same (Winning🏆)";
+     // case : compare in number sequnace and duplicate and wining range 
+    // if bid in below rank 1 bid number and duplicate and within the range
       }
-
+      else{
+          return "Low and Same"
+      }
     }
 
     if (!response)
@@ -466,7 +476,7 @@ const MyBids = async (req, res) => {
       success: true, data:
         response.ranks.filter((el) => el.userId.toString() === userId).map((el) => {
           return {
-            bidStatus: assignRankLabel(el, response.createdSlots),
+            bidStatus: assignRankLabel(el, response.createdSlots,response.ranks[0].bid),
             bid: el.bid,
             biddingTime: el.biddingTime
           }

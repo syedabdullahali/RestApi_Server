@@ -19,7 +19,6 @@ exports.sendSingleNotification = async (userId, name, description,image) => {
         notification: {
             title: name,
             body: description,
-            
         },
     };
 

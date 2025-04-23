@@ -15,12 +15,8 @@ router.post("/user/email/kyc", isAuth.authenticateToken, kycEamilUpdate); //modi
 
 router.post("/withdra/create", isAuth.authenticateToken, createwidthraw);
 
-
 //for admin user
 router.get("/admin/withdraw/get/all/:id", isAuth.AdminAuthentication, getWidthraws)
-
-
-
 router.put("/admin/update/status/:id", isAuth.AdminAuthentication, updateKYCStatus)
 router.get("/admin/get/all/kyc", isAuth.AdminAuthentication, getAllKYC);
 router.get("/admin/get/:id", isAuth.AdminAuthentication, GETKYCBYAdmin)

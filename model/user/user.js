@@ -5,6 +5,7 @@ const UserSchema = new mongoose.Schema(
   {
     name: {
       type: String,
+      default:null
     },
     mobileNumber: {
       type: Number,
@@ -13,6 +14,7 @@ const UserSchema = new mongoose.Schema(
     },
     email: {
       type: String,
+      default:null
     },
     profile: {
       type: String
@@ -137,6 +139,8 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
+
+// Remove unique index on email (if exists)
 // UserSchema.pre("save", async function (next) {
 //   if (!this.name) { // Only generate if name is missing
 //     let isUnique = false;
@@ -157,5 +161,6 @@ const UserSchema = new mongoose.Schema(
 
 
 const UserModel = mongoose.model("User", UserSchema);
+
 
 module.exports = UserModel;

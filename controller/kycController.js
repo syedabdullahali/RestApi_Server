@@ -50,6 +50,7 @@ exports.updatedDocuments = async (req, res) => {
 
   try {
     const checkUser = await UserModel.findById(_id)
+    console.log(checkUser)
 
     if (!checkUser) {
       return res.status(404).send({ success: false, message: "User not found" });
@@ -78,6 +79,9 @@ exports.updatedDocuments = async (req, res) => {
       checkKYCUser.aadhar_photo = aadhar_photo
       checkKYCUser.pancardNumber = pancardNumber
       checkKYCUser.pancard_photo = pancard_photo
+      if(!checkKYCUser.mobileNumber){
+        checkKYCUser.mobileNumber = checkUser.mobileNumber
+      }
       // checkKYCUser.documentKYC = true
       const result = await checkKYCUser.save()
 
@@ -87,13 +91,15 @@ exports.updatedDocuments = async (req, res) => {
       return res.status(403).send({ success: false, message: "Failed to update kyc" });
     }
 
-    const result = await userKyc.create({ user: _id, aadharNumber, aadhar_photo, pancardNumber, pancard_photo, });
+    const result = await userKyc.create({ user: _id, aadharNumber, aadhar_photo, pancardNumber, 
+      pancard_photo,mobileNumber:checkKYCUser.mobileNumber||checkUser.mobileNumber});
+      
     if (result) {
       return res.status(201).send({ success: true, data: result, message: "KYC Apply successfully", });
     }
     return res.status(403).send({ success: false, message: "Failed to apply kyc" });
   } catch (error) {
-    // console.log("error on kyc: ", error);
+    console.log("error on kyc: ", error);
     return res.status(500).send({ success: false, message: "Internal Server Error", error: error.message, });
   }
 }

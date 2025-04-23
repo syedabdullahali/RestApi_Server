@@ -1,4 +1,4 @@
-const { hndaleTransitionCalculation,handleWithdrawal, handleGetWithdrawalBalance } = require('../controller/walletController')
+const { hndaleTransitionCalculation,handleWithdrawal, handleGetWithdrawalBalance, getWithdrawAllertiHistory, updateWithdrawAllertiHistory } = require('../controller/walletController')
 const auth = require("../middleware/authenticateToken");
 
 const router =  require('express').Router()
@@ -8,6 +8,8 @@ router.get('/withdrawal_balance',auth.authenticateToken,handleGetWithdrawalBalan
 
 
 router.post('/withdrawal',auth.authenticateToken, handleWithdrawal);
+router.get('/withdraw_Allert_History',auth.authenticateToken, getWithdrawAllertiHistory);
+router.post('/withdraw_Allert_History/update/:id',auth.authenticateToken, updateWithdrawAllertiHistory);
 
 
 module.exports = router

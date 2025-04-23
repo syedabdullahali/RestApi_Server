@@ -130,7 +130,8 @@ const routes = [
   {
     path: "/api/otp",
     func: sendOptRoutes,
-  }
+  },
+  
 ];
 
 

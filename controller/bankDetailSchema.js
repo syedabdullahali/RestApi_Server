@@ -1,4 +1,6 @@
 const bankDetails = require("../model/bankDetails")
+const userKyc = require("../model/userKyc")
+
 
 const createBankDetail = async (req, res) => {
   try {
@@ -92,12 +94,44 @@ const deleteBankDetail = async (req, res) => {
 const getBankDetailById  = async (req,res)=>{
     try{ 
     const response = await bankDetails.findOne({user:req.user._id})
-    .populate({
-        path:"user",
-        select:"name email mobileNumber"
-    })
+    const response2 =  await userKyc.findOne({user:req.user._id})
+    // .populate({
+    //     path:"user",
+    //     select:"name email mobileNumber"
+    // })
 
-    res.status(200).json({success:true,data:response,message:"Fetch Bank Detail Successfully"})
+    res.status(200).json({success:true,
+      data:response,
+      verificationData:{
+        bank:{
+          varification:response.status,
+          accountNo:response.enterAccountNumber,
+          upiId:response.enterUpiId,
+        },
+        kycVarification:{
+          varification:response2.status,
+          pancardNumber:response2.pancardNumber,
+          aadharNumber:response2.aadharNumber,
+        },
+        mobileVarification:{
+          varification:"Approve",
+          mobileNo:9005126629
+        },
+        emailVarification:{
+          varification:"Approve",
+          email:"syedabdullahali380@gmail.com"
+        }
+      },
+      profileDetails:{
+           name:response2.name,
+           dateOfBirth:response2.dateOfBirth,
+           pinCode:response2.pincode,
+           address:response2.address,
+           city:response2.city,
+           state:response2.state,
+           dob:response2.dob
+      },
+      message:"Fetch Bank Detail Successfully"})
     }catch(error){
     res.status(500).json({success:false,data:error,message:"Somthing Went Wrong ....."})
  }

@@ -74,15 +74,15 @@ const Register = async (req, res) => {
       }
     } else {
 
-
+      
       const newUser = new User({
         ...data,
         referralCode:referralCode+""+latestCounter,
-        name:"",
-        email:""
+        name:null,
+        email:null
       });
 
-      console.log(newUser)
+      // console.log(newUser)
 
       await newUser.save({ session });
 
@@ -98,7 +98,7 @@ const Register = async (req, res) => {
 
       await session.commitTransaction();
       session.endSession();
-
+          // console.log("sessionId",sessionId)
       return res.status(201).json({
         success: true,
         message: "User created successfully",
@@ -164,14 +164,20 @@ const Login = async (req, res) => {
 
 const LoginVerify = async (req, res) => {
   const { mobileNumber, otp, fcmToken, sessionId } = req.body;
+
   try {
+
     const otpResult = await otpController.verifyOTPFactor(sessionId, otp);
+
+  console.log(otpResult)
     
     if (!otpResult.success) {
       return res.status(200).json({ success: false, message: otpResult.message });
     }
 
-    const user = await User.findOne({ mobileNumber, sessionId }).select("-password");
+    const user = await User.findOne({ mobileNumber });
+
+    console.log(user)
 
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid OTP" });

@@ -26,18 +26,18 @@ exports.verifyOTPFactor = async (sessionId, otp) => {
     try {
       console.log(`🔍 Verifying OTP for session: ${sessionId}`);
       const response = await TwoFactor.verifyOTP(sessionId, otp);
-      console.log("✅ OTP Response:", response);
+      console.log("✅ OTP Response:", response,response == "OTP Matched");
   
-      if (response !== "OTP Matched") {
-        return { success: false, message: `OTP verification failed: ${response}` };
+      if (response == "OTP Matched") {
+        return { success: true, message: `OTP verification failed: ${response}` };
       }
   
-      return { success: true, message: response };
+      return { success: false, message: response };
     } catch (error) {
       return { success: false, message: `OTP verification failed: ${error}` };
     }
   };
-  
+
 exports.urlSendTestOtp = async (mobile) => {
     try {
         var config = {
