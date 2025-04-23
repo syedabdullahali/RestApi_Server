@@ -1,5 +1,6 @@
 const bankDetails = require("../model/bankDetails")
 const userKyc = require("../model/userKyc")
+const user = require("../model/user/user")
 
 
 const createBankDetail = async (req, res) => {
@@ -95,6 +96,8 @@ const getBankDetailById  = async (req,res)=>{
     try{ 
     const response = await bankDetails.findOne({user:req.user._id})
     const response2 =  await userKyc.findOne({user:req.user._id})
+    const response3 =  await user.findById(req.user._id)
+
     // .populate({
     //     path:"user",
     //     select:"name email mobileNumber"
@@ -104,35 +107,36 @@ const getBankDetailById  = async (req,res)=>{
       data:response,
       verificationData:{
         bank:{
-          varification:response.status,
-          accountNo:response.enterAccountNumber,
-          upiId:response.enterUpiId,
+          varification:response?.status||"Pending",
+          accountNo:response?.enterAccountNumber||"",
+          upiId:response?.enterUpiId||"",
         },
         kycVarification:{
-          varification:response2.status,
-          pancardNumber:response2.pancardNumber,
-          aadharNumber:response2.aadharNumber,
+          varification:response2?.status||"Pending",
+          pancardNumber:response2?.pancardNumber||"",
+          aadharNumber:response2?.aadharNumber||"",
         },
         mobileVarification:{
           varification:"Approve",
-          mobileNo:9005126629
+          mobileNo:response3?.mobileNumber
         },
         emailVarification:{
-          varification:"Approve",
-          email:"syedabdullahali380@gmail.com"
+          varification:response2?.email?"Approve":"Pending",
+          email:response2?.email|| ""
         }
       },
       profileDetails:{
-           name:response2.name,
-           dateOfBirth:response2.dateOfBirth,
-           pinCode:response2.pincode,
-           address:response2.address,
-           city:response2.city,
-           state:response2.state,
-           dob:response2.dob
+           name:response2?.name||"",
+           dateOfBirth:response2?.dateOfBirth||"",
+           pinCode:response2?.pincode||"",
+           address:response2?.address||"",
+           city:response2?.city||"",
+           state:response2?.state||"",
+           dob:response2?.dob||""
       },
       message:"Fetch Bank Detail Successfully"})
     }catch(error){
+      console.log(error)
     res.status(500).json({success:false,data:error,message:"Somthing Went Wrong ....."})
  }
 }

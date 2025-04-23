@@ -14,11 +14,6 @@ const kycSchema = new mongoose.Schema(
     email: {
       type: String,
     },
-    mobileNumber: {
-      type: Number,
-      required: true,
-      unique: true,
-    },
     status: {
       type: String,
       enum: ["Pending", "Reject", "Approve"],

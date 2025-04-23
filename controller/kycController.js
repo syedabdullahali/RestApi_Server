@@ -50,7 +50,7 @@ exports.updatedDocuments = async (req, res) => {
 
   try {
     const checkUser = await UserModel.findById(_id)
-    console.log(checkUser)
+    console.log(checkUser,"kskljgrjkgb")
 
     if (!checkUser) {
       return res.status(404).send({ success: false, message: "User not found" });
@@ -79,11 +79,12 @@ exports.updatedDocuments = async (req, res) => {
       checkKYCUser.aadhar_photo = aadhar_photo
       checkKYCUser.pancardNumber = pancardNumber
       checkKYCUser.pancard_photo = pancard_photo
-      if(!checkKYCUser.mobileNumber){
+      if(!checkKYCUser?.mobileNumber){
         checkKYCUser.mobileNumber = checkUser.mobileNumber
       }
       // checkKYCUser.documentKYC = true
       const result = await checkKYCUser.save()
+    console.log(checkUser)
 
       if (result) {
         return res.status(200).send({ success: true, data: result, message: "KYC updated successfully", });
@@ -92,7 +93,7 @@ exports.updatedDocuments = async (req, res) => {
     }
 
     const result = await userKyc.create({ user: _id, aadharNumber, aadhar_photo, pancardNumber, 
-      pancard_photo,mobileNumber:checkKYCUser.mobileNumber||checkUser.mobileNumber});
+      pancard_photo});
       
     if (result) {
       return res.status(201).send({ success: true, data: result, message: "KYC Apply successfully", });
@@ -200,6 +201,7 @@ exports.updatePersonalInformation = async (req, res) => {
       checkUserKyc.address = address
       checkUserKyc.state = state
       checkUserKyc.city = city
+      checkUserKyc.mobileNumber = checkUser.mobileNumber
       const result = await checkUserKyc.save()
       if (result) {
         return res.status(200).send({ success: true, data: result, message: "KYC updated successfully", });

@@ -791,8 +791,8 @@ const  handleGetWithdrawalBalance = async (req, res)=>{
       success:true,
       data:[
         {value: (response2[0]?.totalEarningAmount - transactionAmount[0]?.totalDebitReferral)||0, label: 'Referral Amount',type:"referral"},
-        {value: responseWallet.privateContestAmount, label: 'Private Contest Balance',type:"private"},
-        {value: Math.ceil(withDrwalBalanceAfterTax), label: 'Withdrawable balance',type:"withdrawable"},
+        {value: responseWallet.privateContestAmount||0, label: 'Private Contest Balance',type:"private"},
+        {value: Math.ceil(withDrwalBalanceAfterTax?withDrwalBalanceAfterTax:0), label: 'Withdrawable balance',type:"withdrawable"},
       ]
 
     })
