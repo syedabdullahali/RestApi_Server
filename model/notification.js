@@ -9,11 +9,12 @@ const itemSchema = new mongoose.Schema({
     name: String,
     description: String,
     linkPath: { type: String },
+    paramObj:{type:Object},
     price: Number,
-    notficationParamObj:Object,
     type: [{ type: String, enum: ["internal", "external"] }],
     isRead: { type: Boolean, default: true },
 
 }, { timestamps: true });
 
 module.exports = mongoose.model('notification', itemSchema);
+

@@ -1,9 +1,10 @@
 const Contest=require("../model/contestModel");
-const timeSheduleSchema = require("../model/contestTimeSheduleList")
+const mongoose = require("mongoose");
 const SubCategory = require("../model/admin/subCategory");
 const {users}=require("../sockethelper/socketUsers");
 const Category=require("../model/admin/category");
 const userContestHistory=require("../model/admin/userContestDetailSchema");
+
 
 const getAndEmitContestsByCategory = async (categoryId, userId, io) => {
   const userSocketId = users[userId]?.toString();
@@ -32,11 +33,9 @@ const getAndEmitContestsByCategory = async (categoryId, userId, io) => {
     const liveContests = [];
     const upcomingContests = [];
 
-    contests.forEach(async (contest) => {
-      const timeSlots = await timeSheduleSchema.find({contestId:contest._id})
-      contest.timeSlots =timeSlots
+    contests.forEach((contest) => {
       let activeTimeSlot = null;
-      contest?.timeSlots?.forEach((slot) => {
+      contest.timeSlots.forEach((slot) => {
         if (slot.status === "stopped") return;
         if (
           currentDateTime >= slot.startTime &&
@@ -113,11 +112,8 @@ const getAndEmitContestsForAllCategories = async (io) => {
       const liveContests = [];
       const upcomingContests = [];
 
-
-      contests.forEach(async (contest) => {
+      contests.forEach((contest) => {
         let activeTimeSlot = null;
-        const timeSlots = await timeSheduleSchema.find({contestId:contest._id})
-        contest.timeSlots=timeSlots
         contest.timeSlots.forEach((slot) => {
           if (slot.status === "stopped") return;
           if (
@@ -225,3 +221,8 @@ module.exports = {
     getAndEmitContestsForAllCategories,
     getExpiredContestsForUser
   };
+
+
+
+
+  

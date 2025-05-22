@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const {v4:uuidv4} =  require("uuid")
 
 const UserSchema = new mongoose.Schema(
   {
@@ -9,7 +10,7 @@ const UserSchema = new mongoose.Schema(
     mobileNumber: {
       type: Number,
       required: true,
-      unique: true,
+      // unique: true,
     },
     email: {
       type: String,
@@ -21,6 +22,9 @@ const UserSchema = new mongoose.Schema(
     otp: {
       type: Number,
       // required: true,
+    },
+    sessionId:{
+     type:String
     },
     password: {
       type: String,
@@ -112,10 +116,10 @@ const UserSchema = new mongoose.Schema(
           ref:"timeSheduleSchema"
         },
         isNotificationSended:{
-           default:false,
-           type:Boolean,
-        }
-      },
+          default:false,
+          type:Boolean,
+       }
+      },   
     ],
     fcmToken: {
       type: String
@@ -124,7 +128,11 @@ const UserSchema = new mongoose.Schema(
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     joinPrivateContest: [{ type: mongoose.Schema.Types.ObjectId, ref: "privateContest" }],
-    notifications: [{ type: mongoose.Schema.Types.ObjectId, ref: "notification" }]
+    notifications: [{ type: mongoose.Schema.Types.ObjectId, ref: "notification" }],
+    referralCode: {
+      type: String,
+      unique: true,
+    },
   },
   {
     timestamps: true,
@@ -132,7 +140,27 @@ const UserSchema = new mongoose.Schema(
 );
 
 
+// Remove unique index on email (if exists)
+// UserSchema.pre("save", async function (next) {
+//   if (!this.name) { // Only generate if name is missing
+//     let isUnique = false;
+//     let userName;
+
+//     while (!isUnique) {
+//       userName = `user_${uuidv4()}`;
+//       const existingUser = await mongoose.model("User").findOne({ name: userName });
+//       if (!existingUser) isUnique = true;
+//     }
+
+//     this.name = userName; // Assign unique name
+//   }
+//   next();
+// });
+
+
+
 
 const UserModel = mongoose.model("User", UserSchema);
+
 
 module.exports = UserModel;

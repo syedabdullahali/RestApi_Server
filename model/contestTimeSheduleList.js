@@ -3,7 +3,7 @@ const mongoose =  require('mongoose')
 const timeSheduleSchema = new mongoose.Schema({
   startTime: { type: Date },
   endTime: { type: Date },
-  status: { type: String, enum: ["active", "stopped"], default: "active" },
+  status: { type: String, enum: ["active", "stopped"], default: "stopped" },
   contestId: {type:mongoose.Schema.Types.ObjectId,ref:"categoryContest"}
 },{timestamps:true});
 

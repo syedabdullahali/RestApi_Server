@@ -4,7 +4,7 @@ const auctionCategorySchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
     duration: { type: String, required: true }, // "5 minutes", "1 hour"
-    sortingNumber: { type: Number }, // Dynamically calculated field
+    sortingNumber: { type: Number,default:0 }, // Dynamically calculated field
   },
   {
     timestamps: true,

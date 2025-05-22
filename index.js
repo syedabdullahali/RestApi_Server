@@ -5,93 +5,175 @@ app.use(express.json());
 app.use(require("cors")());
 const http = require("http");
 require('dotenv').config()
+const server = http.createServer(app);
 
-const server =  http.createServer({}, app);
-const initializeSocket = require("./sockethelper/socket");
-const { handalePrizeDistribution } = require("./function/HandaleprizeDistribution");
-initializeSocket(server, app);
-const cron = require("node-cron");
-const { handalePrivatePrizeDistribution } = require("./function/HndalePrivatePrizeDistribution");
 
-const PORT = process.env.PORT || 7000;
+app.use("/admin-account", require("./router/SignUp"));
+const categoryRoute = require("./router/category");
+const subcategoryRoute = require("./router/subcategory");
+const contestRoutes = require("./router/contestRoutes");
+const bannerRoutes = require("./router/bannerRoutes");
+const userRoutes = require("./router/userRoutes");
+const pContestRoute = require("./router/privateContestRoutes");
+const catContest = require("./router/categoryContestRoutes");
+const reviewContest = require("./router/reviewRoutes");
+const documentRoute = require("./router/documentRoutes");
+const plannRoute = require("./router/plannRoutes");
+const tdsGstTextRoute = require("./router/tdsGstTextRoutes");
+const kycRoute = require("./router/kycRoutes")
+const userContestDetailsRoute = require("./router/UserContestRouter");
+const paymentIntegrationRoute = require("./router/PaymentIntegrationKey")
+const offerRechargeRoute = require("./router/offerRecharge")
+const notificationRoute = require("./router/notification")
+const walletRoute = require("./router/wallet")
+const offerRechargeSetting = require("./router/oferRechargeSetting");
+const rankSetting =  require("./router/userRankControllerRoute")
+const referralRoutes = require('./router/referal');
+const referralControllerRoutes = require('./router/referalController');
+const bankDetailRoutes = require('./router/bankDetail');
+const widthrawSettingRoutes = require('./router/widthrawSetting');
+const sendOptRoutes = require('./router/sendOpt');
 
-const interval = parseInt(process.env.EVENT_TRIGGER_TIME_SECOND || "40", 10);
-// if (!interval || interval < 1 || interval > 59) throw new Error("Invalid interval");
 
-let isRunning = false;
+const routes = [
+  {
+    path: "/api/kyc/",
+    func: kycRoute,
+  },
+  {
+    path: "/api/category/",
+    func: categoryRoute,
+  },
+  {
+    path: "/api/subcategory/",
+    func: subcategoryRoute,
+  },
+  {
+    path: "/api/contest/",
+    func: contestRoutes,
+  },
+  {
+    path: "/api/banner",
+    func: bannerRoutes,
+  },
+  {
+    path: "/api/user/",
+    func: userRoutes,
+  },
+  {
+    path: "/api/privatecontest/",
+    func: pContestRoute,
+  },
+  {
+    path: "/api/catcontest/",
+    func: catContest,
+  },
+  {
+    path: "/api/review/",
+    func: reviewContest,
+  },
+  {
+    path: "/api/document/",
+    func: documentRoute,
+  },
+  {
+    path: "/api/planned/",
+    func: plannRoute,
+  },
+  {
+    path: "/api/text/",
+    func: tdsGstTextRoute,
+  },
+  {
+    path: "/api/time",
+    func: userContestDetailsRoute,
+  },
+  {
+    path: "/api/paymentIntegration",
+    func: paymentIntegrationRoute,
+  },
+  {
+    path: "/api/offerRecharge",
+    func: offerRechargeRoute,
+  },
+  {
+    path: "/api/offerRechargeSetting",
+    func: offerRechargeSetting,
+  },
+  {
+    path: "/api/wallet",
+    func: walletRoute,
+  },
+  {
+    path: "/api/notify",
+    func: notificationRoute,
+  },
+  {
+    path: "/api/rankSetting",
+    func: rankSetting,
+  },
+  {
+    path: "/api/referrals",
+    func: referralRoutes,
+  },
+  {
+    path: "/api/referal_controller",
+    func: referralControllerRoutes,
+  },
+  {
+    path: "/api/bankDetails",
+    func: bankDetailRoutes,
+  },
+  {
+    path: "/api/widthrawSetting",
+    func: widthrawSettingRoutes,
+  },
+  {
+    path: "/api/otp",
+    func: sendOptRoutes,
+  },
+  
+];
 
-cron.schedule(`*/${interval} * * * * *`, async () => {
-  if (isRunning) return;
-  isRunning = true;
+
+
+routes.forEach(({ path, func }) => {
+  app.use(path, func);
+});
+
+const PORT = process.env.PORT || 5000;
+
+app.post('/webhook', (req, res) => {
   try {
-    await handalePrizeDistribution();
-    await handalePrivatePrizeDistribution();
-  } catch (err) {
-    console.error("Error in prize distribution:", err);
-  } finally {
-    isRunning = false;
+    const eventData = req.body;
+
+    console.log('Webhook received:', eventData);
+
+    // Respond quickly with success
+    res.status(200).json({
+      success: true,
+      message: 'Webhook received successfully'
+    });
+  } catch (error) {
+    console.error('Error handling webhook:', error);
+
+    // Respond with error
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 });
 
-mongoose
-  .connect(process.env.MONGO_DB_URI,
-    {
-      socketTimeoutMS: 45000, // Increase timeout
-      serverSelectionTimeoutMS: 5000, // Time MongoDB waits for a response
-    }
-  )
-  .then(() => {
+mongoose.connect(process.env.MONGO_DB_URI)
+  .then(async () => {
     server.listen(PORT, () => {
-      console.log("Local host running on port ", 7000);
+      console.log("Local host running on port ", 5000);
+      console.log("Database connected");
     });
   })
   .catch((error) => {
     console.log(error);
   });
 
-
-
-// Total Deposit Balance : 
-// ₹2000.00 
-
-// Total Withdrawn Balance:  total  WithDraw by user 
-// ₹० 
-
-// Wallet Balance: 
-// ₹218.92 
-
-// Winning Balance: 
-// ₹694.55
-
-// Tax:  = (Total Withdrawn Balance  +Winning Balance  - Total Deposit Balance) *30
-// ₹2000.00 
-
-//Winning Balance After Tax = Winning balance - Tax. 
-// ₹2000.00 
-
-// Referral Amount: 
-// २० 
-// Private Contest Balance = 
- 
-// Withdrawable Balance: = Winning Balance After Tax  + Referral Amount + Private Contest Balance
-// ₹0 
-
-// Private Contest Balance
-
-// GST Deducted: 
-// ¥440.00 
-
-//amount  will deduct to  (Winning Balance + referal balance + privatecontest balance ) 
-
-// TDS Deducted:  = Total Withdrawn Balance - and current withdraw balance 
-
-
-//exampale 
-
-// Usre won 3000 
-
-// tax 900
-// winning balance after tax 2100 
-
-// referal 1000
-// private contest 1000

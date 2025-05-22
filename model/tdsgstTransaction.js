@@ -7,11 +7,12 @@ const TDSGSTtransaction = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    type: { type: String,
-      enum: ['TDS','GST'],
+    type: {
+      type: String,
+      enum: ['TDS', 'GST'],
       required: true
-     },
-    amount: { type: Number, required:true },
+    },
+    amount: { type: Number, required: true },
   },
   {
     timeseries: true,

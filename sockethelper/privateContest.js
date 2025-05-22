@@ -6,7 +6,8 @@ const privateContestSetting=require("../model/admin/pcontestseetingModel")
 const { users } = require('../sockethelper/socketUsers');
 const TransactionHistory=require("../model/transactionhistory");
 const Wallet=require("../model/walletSchema");
-const userprivatecontest = require("../model/userprivatecontest");
+const calculatePrivatePlayerRanking = require("../function/calculatePrivatePlayerRanking");
+const calculatePlayerRankingTest = require("../function/calculatePlayerRankingTest");
 
 const { ObjectId } = mongoose.Types;
 
@@ -237,9 +238,9 @@ const bidding = async (req, res) => {
   const { contestId } = req.params;
   const userId = req.user._id;
   const { bidAmount } = req.body; 
-  const userSocketId = users[userId]?.toString();
   const session = await mongoose.startSession();
   const currentTime = new Date();
+
   try {
 
     session.startTransaction();
@@ -248,73 +249,96 @@ const bidding = async (req, res) => {
       userId,
       contestId,
     }).session(session);
+
+    if (userContestDetail?.bids?.map((el) => el.Amount)?.includes(bidAmount)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({ success: false, message: "Duplicate bids found. Enter a unique bid." });
+    }
+
+    if (bidAmount < 1) {
+      return res.status(200).json({ success: false, message: `Bid too low! Minimum bid is ${1}.` });
+    }
+    if (bidAmount > 100) {
+      return res.status(200).json({ success: false, message: `Bid too high! Maximum bid is ${100}.` });
+    }
+
+
     const contest = await PrivateContest.findById(contestId).session(session);
+
     const wallet = await Wallet.findOne({ user: userId }).session(session);
+    if (!contest) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({ success: false, message: "Contest not found" });
+    }
+
     if (currentTime > contest.endDateTime) {
       await session.abortTransaction();
       session.endSession();
-      req.io.to(userSocketId).emit("error", {message:"Contest is already over"});
       return res.status(200).json({success:false, message: "Contest is already over" });
     }
     if (!wallet) {
       await session.abortTransaction();
       session.endSession();
-      req.io.to(userSocketId).emit("walletError", { message: "Wallet not found" });
       return res.status(200).json({ success: false, message: "Wallet not found" });
     }
 
-    if (!userContestDetail) {
-      await session.abortTransaction();
-      session.endSession();
-      req.io.to(userSocketId).emit("error", { message: "User contest details not found" });
-      return res.status(404).json({ success: false, message: "User contest details not found" });
-    }
+
 
     if (!contest) {
       await session.abortTransaction();
       session.endSession();
-      req.io.to(userSocketId).emit("error", { message: "Private contest not found" });
       return res.status(404).json({ success: false, message: "Private contest not found" });
     }
     
     if (wallet.balance < bidAmount && wallet.winningbalance < bidAmount) {
       await session.abortTransaction();
       session.endSession();
-      req.io.to(userSocketId).emit("walletError", { message: "Insufficient balance for bidding in contest" });
       return res.status(400).json({ success: false, message: "Insufficient balance" });
     }
 
-    if (wallet.balance >= bidAmount) {
-      wallet.balance -= bidAmount;
+    if (wallet.balance >= contest.createdEntryFee) {
+      wallet.balance -= contest.createdEntryFee;
     } else {
-      wallet.winningbalance -= bidAmount;
+      wallet.winningbalance -= contest.createdEntryFee;
     }
-   
-    if (userContestDetail.bids.length >= contest.createdUpto) {
-      await session.abortTransaction();
-      session.endSession();
-      req.io.to(userSocketId).emit("error", { message: `Maximum bids reached (${contest.createdUpto})` });
-      return res.status(400).json({ success: false, message: "Maximum bids reached" });
+
+
+    if (!userContestDetail) {
+      const temp = new UserPrivateContestDetails({
+        userId,
+        contestId,
+        bids: [{ Amount: bidAmount, bidTimeDate: new Date() }], // Assuming `bids` is an array
+        totalAmount: contest.createdEntryFee,
+      }); 
+      // Save the new document with session if provided
+      await temp.save({ session });
+    } 
+    else {
+      userContestDetail.bids.push({ Amount: bidAmount, bidTimeDate: new Date() });
+      userContestDetail.totalAmount += contest.createdEntryFee;
+      await userContestDetail.save({ session });
     }
+
+    
+   if ((userContestDetail?.bids?.length-1) >= contest.createdUpto) {
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(400).json({ success: false, message: "Maximum bids reached" });
+  }
   
-    userContestDetail.bids.push({ Amount: bidAmount, bidTimeDate: new Date() });
-    userContestDetail.totalAmount += bidAmount;
-    await userContestDetail.save({ session });
 
-    contest.bids +=1;
-    contest.totalbidAmount += bidAmount;
-    const rankings = await calculateUserRankings(contestId);
-    console.log({rankings})
-    contest.ranks = rankings;
+
     await contest.save({ session });
-
     await wallet.save({ session });
    
     const transaction = new TransactionHistory({
       user: userId,
       type: "debit",
-      amount: bidAmount,
+      amount: contest.createdEntryFee,
       description: `Bid ₹${bidAmount} in Private Contest`,
+      amountType:"realAmount"
     });
     
     await transaction.save({ session });
@@ -322,18 +346,31 @@ const bidding = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
- 
-    req.io.to(userSocketId).emit("bidding", { message: "Bid successfully placed", contest });
-    req.io.emit(`singlePrivateContest-${contest._id}`, { contest });
-    return res.status(200).json({ success: true,message: "Bid successfully placed" });
+    const data = await calculatePrivatePlayerRanking(contestId,{
+      "winingPercentage":(contest.createdwiningPercentage||0),
+      "entryFees":contest.createdEntryFee,
+      "spots":contest.ranks.length+1 ,
+      "prizedistribution":contest.prizeDistributionPercentage
+  })
+
+  await PrivateContest.findByIdAndUpdate(
+    contest._id,  // Ensure contest._id is the correct ID for UserPrivateContestDetails
+    { ranks: data },
+    { new: true }
+  );
+
+
+
+     return res.status(200).json({ success: true,message: "Bid successfully placed",data });
 
   } catch (error) {
+    console.log(error)
     await session.abortTransaction();
     session.endSession();
-    req.io.to(userSocketId).emit("error", { message: "An error occurred while placing the bid", error });
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
+
 
 const calculateUserRankings = async (contestId) => {
   try {
@@ -538,135 +575,69 @@ const getSubContestByCatgroyId = async (categoryId,io)=>{
   }
 }  
 
+
 const PrivateContestCategory = async (userId) => {
   try {
+    const contests = await PrivateContest.find({ influencer: userId })
+    .populate("category").select("startDateTime endDateTime category");
+
     const joinContest = await userModel.findById(userId)
-      ?.populate({
-        path: 'joinPrivateContest', // Populates contest IDs in `joinPrivateContest`
-        select: 'startDateTime endDateTime category categoryName ranks', // Ensure 'category' is included
-      });
+    ?.populate({
+      path: 'joinPrivateContest', // Populates contest IDs in `joinPrivateContest`
+      populate: {
+        path: 'category', // Further populates the `category` field inside each contest
+        // select: 'startDateTime endDateTime category', // Select specific fields from the contest
+      },
+    });
+ 
 
-    const contests = await PrivateContest.find({ influencer: userId }).select(
-      "startDateTime endDateTime categoryName category ranks"
-    );
+      let contestJoined = []
+  
+      if(joinContest?.joinPrivateContest){
+        contestJoined =contests.concat(joinContest?.joinPrivateContest)
+      }else{
+        contestJoined = contests
+      }
 
-    console.log("PrivateContestCategory",userId)
-
-    let contestJoined = joinContest?.joinPrivateContest
-      ? contests.concat(joinContest.joinPrivateContest)
-      : contests;
-
-    const liveCategories = [];
-    const upcomingCategories = [];
-    const expiredCategories = [];
+    const liveCategories = new Set();
+    const upcomingCategories = new Set();
+    const expiredCategories = new Set();
 
     const now = new Date();
-
     contestJoined.forEach((contest) => {
-      const contestObj = contest.toObject();
-      const playUserCount = contest.ranks.length; // Total players count
 
-      // Ensure `category` is included in all outputs
-      const contestData = {
-        ...contestObj,
-        playingContest: playUserCount, // Renaming for clarity
-        category: contest.category, // Ensure category is present
-      };
-
-      if (contest.startDateTime > now) {
-        upcomingCategories.push(contestData);
+      if (contest.startDateTime > now) {    
+        upcomingCategories.add(JSON.stringify(contest.category));
       } else if (contest.startDateTime <= now && contest.endDateTime >= now) {
-        liveCategories.push(contestData);
+        liveCategories.add(JSON.stringify(contest.category));
       } else {
-        expiredCategories.push({ ...contestData, playedContest: playUserCount });
+        expiredCategories.add(JSON.stringify(contest.category));
       }
     });
 
+    const live = Array.from(liveCategories).map(JSON.parse);
+    const upcoming = Array.from(upcomingCategories).map(JSON.parse);
+    const expired = Array.from(expiredCategories).map(JSON.parse);
+
     return {
-      live: liveCategories,
-      upcoming: upcomingCategories,
-      expired: expiredCategories,
+      live,
+      upcoming,
+      expired,
     };
   } catch (error) {
     console.error("Error fetching contest categories:", error);
     throw new Error("Failed to retrieve contest categories");
   }
 };
-
-
-// const PrivateContestCategory = async (userId) => {
-//   try {
-//     const joinContest = await userModel.findById(userId)
-//     ?.populate({
-//       path: 'joinPrivateContest', // Populates contest IDs in `joinPrivateContest`
-//       select: 'startDateTime endDateTime category categoryName', // Select specific fields from the contest
-//     });
-
-//     const contests = await PrivateContest.find({ influencer: userId }).select("startDateTime endDateTime categoryName category ranks");
-
-//       let contestJoined = []
-//       if(joinContest?.joinPrivateContest){
-//         contestJoined =contests.concat(joinContest?.joinPrivateContest)
-//       }else{
-//         contestJoined = contests
-//       }
-
-//     const liveCategories = new Set();
-//     const upcomingCategories = new Set();
-//     const expiredCategories = new Set();
-
-//     const now = new Date();
-//     contestJoined.forEach((contest) => {  
-
-//       const contestObj = contest.toObject()
-//       const playUserCount =contest.ranks.length
-//       delete contestObj.ranks
-
-//       if (contest.startDateTime > now) {    
-//         upcomingCategories.add(JSON.stringify(contest));
-//       } else if (contest.startDateTime <= now && contest.endDateTime >= now) {
-//         liveCategories.add(JSON.stringify({...contestObj,playingContest:playUserCount}));
-//       } else {
-//         expiredCategories.add(JSON.stringify({...contestObj,playedContest:playUserCount}));
-//       }
-
-//     });
-
-//     const live = Array.from(liveCategories).map(JSON.parse);
-//     const upcoming = Array.from(upcomingCategories).map(JSON.parse);
-//     const expired = Array.from(expiredCategories).map(JSON.parse);
-
-//     return {
-//       live,
-//       upcoming,
-//       expired,
-//     };
-//   } catch (error) {
-//     console.error("Error fetching contest categories:", error);
-//     throw new Error("Failed to retrieve contest categories");
-//   }
-// };
-
 const GetPrivateContests = async (categoryId, userId,filterObj) => {
 
   const {sortByRangeFilterObj,sortfilterObj} = filterObj
-  // console.log("GetPrivateContests",userId)
-
-  const joinContest = await userModel.findById(userId)
-  ?.populate({
-    path: "joinPrivateContest", // Populates `joinPrivateContest`
-    match: { category: categoryId }, // Filters contests by `categoryId`
-    populate: {
-      path: "influencer", // Populates the `influencer` inside `joinPrivateContest`
-      select: "name email", // Selects only necessary fields
-    },
-  });
-  // console.log("categoryId",categoryId, "userId",userId)
 
   const sortStage = {
     $sort: {createdEntryFee:-1}
   };
   
+
 
 
   if(sortfilterObj?.sortByEntryAmount){
@@ -683,37 +654,13 @@ const GetPrivateContests = async (categoryId, userId,filterObj) => {
 
 
   try {
-    const contests = await PrivateContest.aggregate([
-      {
-        "$match": {
-          "category": new mongoose.Types.ObjectId(categoryId),
-          "influencer": new mongoose.Types.ObjectId(userId)
-        }
-      },
-      {
-        "$lookup": {
-          "from": "users",
-          "localField": "influencer",
-          "foreignField": "_id",
-          "as": "userDetail"
-        }
-      },
-      {
-        "$addFields": {
-          "userDetail": {
-            "$map": {
-              "input": "$userDetail",
-              "as": "user",
-              "in": {
-                "_id": "$$user._id",
-                "name": "$$user.name",
-                "email": "$$user.email"
-              }
-            }
-          }
-        }
-      },
-      {
+    const contests = await PrivateContest.aggregate([{
+      $match:{
+        category: new mongoose.Types.ObjectId(categoryId),
+        influencer: new mongoose.Types.ObjectId(userId) ,
+      }
+    },
+    {
       $match: {
         ...(sortByRangeFilterObj?.dateFilter?.startDate?.trim() && sortByRangeFilterObj?.dateFilter?.endDate?.trim() && {
           startDateTime: { $gte: new Date(sortByRangeFilterObj?.dateFilter?.startDate) },
@@ -744,68 +691,37 @@ const GetPrivateContests = async (categoryId, userId,filterObj) => {
     sortStage
   ])
 
-
-
     const now = new Date();
-    const liveContests = {};
-    const upcomingContests = {};
-    const expiredContests = {};
+    const liveContests = [];
+    const upcomingContests = [];
+    const expiredContests = [];
 
-
-    const contestwithUserName = joinContest?.joinPrivateContest?.map((el)=>({...el.toObject(),name:el.influencer.name}))
-
-    let contestJoined = contestwithUserName
-      ? contests.concat(contestwithUserName)
-      : contests;
-
-    contestJoined.forEach((contest) => {
-      const userId = contest?.userDetail?.length ? contest.influencer : contest.influencer._id;
-      const userName =     contest?.userDetail?.[0].name?.trim()?contest?.userDetail?.[0].name:contest?.name
-
-
-
-      if (!upcomingContests[userId]) {
-        upcomingContests[userId] = {
-          name:userName,
-          privateContest:[]
-        };
-      }
-      if (!liveContests[userId]) {
-        liveContests[userId] = {
-          name:userName,
-          privateContest:[]
-        };
-      }
-      if (!expiredContests[userId]) {
-        expiredContests[userId] = {
-          name:userName,
-          privateContest:[]
-        };
-      }
-
+    contests.forEach((contest) => {
       if (contest.startDateTime > now) {
-        upcomingContests[userId].privateContest.push(contest);
+        upcomingContests.push(contest);
       } else if (contest.startDateTime <= now && contest.endDateTime >= now) {
-        liveContests[userId].privateContest.push(contest);
+        liveContests.push(contest);
       } else {
-        expiredContests[userId].privateContest.push(contest);
+        expiredContests.push(contest);
       }
-
     });
+
  
     return {
-      live: Object.values(liveContests).filter((el)=>el.privateContest.length),
-      upcoming: Object.values(upcomingContests).filter((el)=>el.privateContest.length),
-      expired: Object.values(expiredContests).filter((el)=>el.privateContest.length),
+      live: liveContests,
+      upcoming: upcomingContests,
+      expired: expiredContests,
     };
   } catch (error) {
-    console.log(error)
-    throw new Error(error);
+    console.error("Error fetching contests:", error);
+    throw new Error("Failed to retrieve contests by category and influencer.");
   }
 };
 
 const ParticipantCategory = async (userId) => {
   try {
+
+
 
     const userContests = await UserPrivateContestDetails.find({ userId })
       .populate({
@@ -845,7 +761,6 @@ const ParticipantCategory = async (userId) => {
     throw new Error("Failed to retrieve contest categories");
   }
 };
-
 const getUserContestsByCategoryAndStatus = async (userId, categoryId) => {
   try {
     const now = new Date();
@@ -865,8 +780,6 @@ const getUserContestsByCategoryAndStatus = async (userId, categoryId) => {
     response.forEach(({ contestId }) => {
       if (contestId && contestId.startDateTime && contestId.endDateTime) {
         if (contestId.startDateTime <= now && contestId.endDateTime >= now) {
-
-
           live.push(contestId);
         } else if (contestId.startDateTime > now) {
           upcoming.push(contestId);
@@ -883,152 +796,16 @@ const getUserContestsByCategoryAndStatus = async (userId, categoryId) => {
       expired
     };
   } catch (error) {
-    // console.error("Error fetching contests by category and status:", error);
+    console.error("Error fetching contests by category and status:", error);
     throw new Error("Failed to retrieve contest categories by status.");
   }
 };
-
-
-const private_Contest_Info =async (contestId)=>{
-  try{
-     const response = await PrivateContest.findById(contestId)
-     .populate({
-      path: "ranks", // Populate the "ranks" field
-      populate: "userId" // Within each rank, populate the "userId" field with the user's details
-     })
-     const totalWinnerSlot = (response.createdSlots*(response.createdwiningPercentage/100))
-
-     const distributedAmount = ((response.createdSlots*response.createdEntryFee) *(response.prizeDistributionPercentage/100))
-     const perUserDistributionAmount = distributedAmount / totalWinnerSlot; // Divide equally
-
-     const maxFill =  new Array(Math.floor(totalWinnerSlot)).fill(Number(perUserDistributionAmount.toFixed(2)))  
-
-     const contestStatus =
-     response.endDateTime < new Date()
-       ? "Winning" // Contest has ended
-       : response.startDateTime > new Date()
-       ? "Upcoming" // Contest is yet to start
-       : "Live"; // Contest is ongoing
-     return {
-      maxFill,
-      currentFill:response.ranks.reduce((crr,el)=>{
-        if(el.WinningAmount){
-          crr.push(el.WinningAmount)
-        }
-        return crr
-      },[]),
-      leaderBord:contestStatus==="Winning"?response.ranks:[],
-      slotFill:response.ranks.length,
-      maxPrizePool:response.createdPrizePool,
-      currentPrizePool:response.ranks.reduce((crr,el)=>crr+el.WinningAmount,0),
-      activeStatus:response.activeStatus,
-      winingPercentage:response.createdwiningPercentage,
-      contestStatus
-     }
-
-  }catch (error){
-    throw error
-  }
-}
-
-const private_Contest_Info_wining =async (contestId,userId)=>{
-    try {
-
-      const contest = await PrivateContest.findById(contestId)
-      .populate({
-        path: "ranks",
-        populate: {
-          path: "userId"
-        }
-      })
-
-      const userBidds = await UserPrivateContestDetails.findOne({contestId,userId})
-      const response =  await PrivateContest.aggregate([
-        {
-          $match:{
-            _id:new mongoose.Types.ObjectId(contestId)
-          }
-        },
-        {
-          $project:{
-            ranks:1
-          }
-        },
-        {
-          $unwind:"$ranks"
-        },
-        {
-          $group: {
-            _id: "$ranks.bid", // Group by bid
-            totalBid: {
-              $sum:1// Sum duplicateCount for each bid
-            },
-            duplicateCount: {
-              $sum: "$ranks.duplicateCount" // Sum duplicateCount for each bid
-            },
-            winingRange: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$ranks.isInWiningRange", true] }, // Check if isInWiningRange is true
-                  1,  // If true, add 1
-                  0   // If false, add 0
-                ]
-              }
-            },
-            topRankCount: {
-              $sum: {
-                $cond: [
-                  { $in: ["$ranks.rank", [1, 2, 3]] }, // Check if rank is 1, 2, or 3
-                  1,  // Count 1 if the rank is in the top ranks
-                  0   // Count 0 if the rank is not in the top ranks
-                ]
-              }
-            }
-          }
-        }
-      ])
-       
-      const filterBidFunction  = (arr)=>{
-        return arr.map((el)=>el._id)
-      }
-
-      return {
-        contestInfo: {
-          title: "Private Contest",
-          firstPrize: contest?.ranks[0]?.WinningAmount,
-          _id:contest?._id
-        },
-        currentWiningUsers: {
-          name:contest.ranks?.[0]?.userId?.name,
-          _id:contest.ranks?.[0]?.userId?._id
-        },
-        cuurenttimeSlots: {
-          startDateTime:contest.startDateTime,
-          endDateTime:contest.endDateTime
-        },
-        bidRange: {
-          max: 100,
-          min: 0,
-        },
-        upto: (contest.createdUpto || 0) - (userBidds?.bids?.length||0),
-        lastThreeDayBidReview:{
-          topFiveAmountWinner: filterBidFunction(response.slice().sort((a, b) => b.winingRange - a.winingRange).slice(0, 5)),
-          topFiveWinningBid: filterBidFunction(response.slice().sort((a, b) => b.topRankCount - a.topRankCount).slice(0, 5)),
-          topFiveWinningBid: filterBidFunction(response.slice().sort((a, b) => b.topRankCount - a.topRankCount).slice(0, 5)),
-          topFiveUniqBid:filterBidFunction(response.slice().sort((a, b) =>   a.duplicateCount -b.duplicateCount).slice(0, 5)),
-          topFiveCrowdedBid:filterBidFunction(response.slice().sort((a, b) => b.totalBid - a.totalBid).slice(0, 5)),
-        }
-      };
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
-}
-
 
 module.exports = {
   joinContest,getPrivateContestData,bidding,checkAndCompleteContests,
   getSingleUserPrivateContestDetails,getUserContestsByCategoryAndStatus,
   getSubContestByCatgroyId,PrivateContestCategory,GetPrivateContests,
-  ParticipantCategory,private_Contest_Info,private_Contest_Info_wining
-};
+  ParticipantCategory};
+
+
+

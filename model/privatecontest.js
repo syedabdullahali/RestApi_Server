@@ -37,6 +37,7 @@ const ContestSchema = new Schema(
     actualPrizePool: { type: Number }, // actual prize poll will be current slot*entry fee
     createdwiningPercentage: { type: Number },
     prizeDistributionPercentage : { type: Number },
+    influencerfee: { type: Number },
     isApproved: { type: Boolean }, // if amount above 1lac then need approval else automatic approve
     ranks: [
           {
@@ -56,11 +57,6 @@ const ContestSchema = new Schema(
     bids: { type: Number,default:0 },
     isComplete: { type: Boolean, default: false },
     contestCode: { type: String},
-    bidRangeOfContest:{
-      maxBidRange:{ type: Number, required: true},
-      minBidRange:{ type: Number, required: true}
-    },
-    isPrizeDistributed:{ type: Boolean, default: false },
     earnAmount:{ type: Number,default:0 },
   },
   { timestamps: true }

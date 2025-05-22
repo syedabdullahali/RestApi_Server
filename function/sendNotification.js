@@ -1,63 +1,71 @@
 const admin = require('firebase-admin');
-const User = require('../model/user/user');
-const Notification = require('../model/notification');
+const User = require('../model/user/user')
+const serviceAccount = require('../won-by-bid-firebase-adminsdk-ns4jh-f405c499cc.json');
 
-const path = require('path');
-
-const serviceAccount =path.join(__dirname,'won-by-bid-notification-firebase-adminsdk-fbsvc-438e707575.json')
-// console.log(path.join(__dirname,'won-by-bid-notification-firebase-adminsdk-fbsvc-438e707575.json'))
+const Notification = require('../model/notification')
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-});
+    // databaseURL: "https://<your-project-id>.firebaseio.com",
+})
 
-exports.sendSingleNotification = async (userId, name, description, obj = {}) => {
-    try {
 
-        const user = await User.findById(userId);
-        if (!user || !user.fcmToken) return; // No user or no token, skip sending
+exports.sendSingleNotification = async (userId, name, description,image) => {
+    const user = await User.findById(userId)
+    const tempDoc = new Notification({ name, description, userId: userId });
 
-        const tempDoc = new Notification({ name, description, userId, ...obj });
-        user.notifications.push(tempDoc?._id);
-        await user.save();
-        await tempDoc.save();
+    const message = {
+        token: user.fcmToken,
+        notification: {
+            title: name,
+            body: description,
+        },
+    };
 
-        const message = {
-            token: user.fcmToken,
-            notification: { title: name, body: description },
-        };
-
-        await admin.messaging().send(message);
-        
-    } catch (error) {
-        console.error('Error sending single notification:', error);
+    if(image){
+      message.notification.image = image
     }
-};
 
-exports.sendMultipleNotification = async (name, description) => {
-    try {
-        const users = await User.find();
-        const tokens = users.map(user => user.fcmToken).filter(Boolean);
+    user.notifications.push(tempDoc?._id);
 
-        if (tokens.length === 0) return; // No valid tokens, skip sending
+    await user.save();
 
-        const message = {
-            tokens,
-            notification: { title: name, body: description },
-        };
+    await tempDoc.save()
 
-        const response = await admin.messaging().sendEachForMulticast(message);
+    await admin.messaging().send(message);
+}
 
-        const notificationDocs = users.map(user => ({
-            userId: user._id,
-            name,
-            description,
-            sentAt: new Date(),
-        }));
-        await Notification.insertMany(notificationDocs);
+exports.sendMultipleNotification = async (name, description,linkPath,image) => {
 
-        return response;
-    } catch (error) {
-        console.error('Error sending multiple notifications:', error);
+    const users = await User.find();
+
+    const tokens = users.map(user => user.fcmToken).filter(token => token);
+
+    const message = {
+        tokens, // List of tokens for multiple users
+        notification: {
+            title: name,
+            body: description,
+        },
+    };
+
+    if(image){
+        message.notification.image = image
     }
-};
+  
+    // Send notifications to multiple users
+    // const response = await admin.messaging().sendMulticast(message);
+    const response = await admin.messaging().sendEachForMulticast(message);
+    // Save notification history in the Notification schema
+    const notificationDocs = users.map(user => ({
+        userId: user._id,
+        name: name,
+        description: description,
+        sentAt: new Date(),
+        linkPath
+    }));
+    
+    await Notification.insertMany(notificationDocs);
+
+    return response
+}
