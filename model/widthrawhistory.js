@@ -18,7 +18,7 @@ const WithdrawSchema = new mongoose.Schema(
     AccountNumber: { type: Number },
     bankName: { type: String },
     IFSC_code: { type: String },
-    status: {
+    Status: {
       type: String,
       enum: ["Completed", "Pending", "Failed"],
       default: "Pending",

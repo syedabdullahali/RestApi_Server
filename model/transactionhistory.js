@@ -7,20 +7,19 @@ const userTransactionHistorySchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    type: {
-      type: String,
-      enum: ['credit', 'debit', 'withdraw', 'winning','privateContestWithdraw'],
+    type: { type: String,
+      enum: ['credit', 'debit', 'withdraw',"bonus","winning"],
       required: true
-    },
-    amountType: {
-      type: String,
-      enum: ['realAmount', 'bonusAmount', 'gstDeduct', 'tdsDeduct', 'referral',"tax"],
-      required: true
-    },
+     },
     amount: { type: Number },
-    description: { type: String },
+    description: { type: String},
   },
-  { timeseries: true, timestamps: true }
+  {
+    timeseries: true,
+  }
 );
 
-module.exports = mongoose.model("transaction_history", userTransactionHistorySchema,);
+module.exports = mongoose.model(
+  "transaction_history",
+  userTransactionHistorySchema
+);

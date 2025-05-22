@@ -8,71 +8,29 @@ const kycSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    name: {
-      type: String,
-    },
-    email: {
-      type: String,
-    },
     status: {
       type: String,
       enum: ["Pending", "Reject", "Approve"],
       required: true,
       default: "Pending",
     },
-    isMobileNumberVerify: {
-      type: String,
-      enum: ["Pending", "Reject", "Approve"],
-      required: true,
-      default: "Pending",
-  },
-   isEmailVerify: {
-    type: String,
-    enum: ["Pending", "Reject", "Approve"],
-    required: true,
-    default: "Pending",
-  },
     aadharNumber: {
       type: Number,
+      required: true,
     },
     aadhar_photo: {
       type: String,
-    },
-    dateOfBirth: {
-      type: Date,
-      // required: true,
+      reqired: true,
     },
     pancardNumber: {
       type: String,
+      required: true,
     },
     pancard_photo: {
       type: String,
+      required: true,
     },
-    dob: {
-      type: String,
-    },
-    state: {
-      type: String,
-      // required: true,
-    },
-    city: {
-      type: String,
-      // required: true,
-    },
-    address: {
-      type: String
-    },
-    documentKYC: {
-      type: Boolean,
-      default: false
-    },
-    addressKyc: {
-      type: Boolean,
-      default: false
-    },
-    pincode: {
-      type: Number,
-    },
+    address: { type: String, required: true },
   },
   {
     timestamps: true,
